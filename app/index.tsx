@@ -1,4 +1,4 @@
-import { C } from "@/src/utils/themes";
+import { C } from "@/src/utils/theme";
 import { View } from "react-native";
 
 export default function Index() {

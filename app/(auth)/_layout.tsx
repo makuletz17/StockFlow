@@ -1,4 +1,4 @@
-import { C } from "@/src/utils/themes";
+import { C } from "@/src/utils/theme";
 import { Stack } from "expo-router";
 
 export default function AuthLayout() {

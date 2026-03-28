@@ -21,7 +21,7 @@ import { useOfflineSync } from "@/src/hooks/useOfflineSync";
 import { useAppStore } from "@/src/store/appStore";
 import { InventoryItem, OfflineRecord, ReceivedStock } from "@/src/types";
 import { formatDateTime, getErrorMessage } from "@/src/utils/helpers";
-import { C, F, R, S, W } from "@/src/utils/themes";
+import { C, F, R, S, W } from "@/src/utils/theme";
 
 export default function MoreScreen() {
   const router = useRouter();
@@ -85,13 +85,22 @@ export default function MoreScreen() {
     }
   };
 
+  const { apiSettings } = useAppStore();
+
   const menuItems = [
     {
-      icon: "settings-outline" as const,
-      label: "Store & API Settings",
+      icon: "storefront-outline" as const,
+      label: "Store Settings",
       sub: selectedStore ? selectedStore.name : "No store selected",
       onPress: () => router.push("/(auth)/settings"),
       color: C.primary,
+    },
+    {
+      icon: "server-outline" as const,
+      label: "API Server",
+      sub: apiSettings?.config?.app_name ?? api.getBaseURL(),
+      onPress: () => router.push("/configure"),
+      color: C.accent,
     },
     {
       icon: "person-outline" as const,

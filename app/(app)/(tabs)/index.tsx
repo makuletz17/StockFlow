@@ -22,7 +22,7 @@ import { useOfflineSync } from "@/src/hooks/useOfflineSync";
 import { useAppStore } from "@/src/store/appStore";
 import { DashboardSummary } from "@/src/types";
 import { formatDateTime } from "@/src/utils/helpers";
-import { C, F, R, S, W } from "@/src/utils/themes";
+import { C, F, R, S, W } from "@/src/utils/theme";
 
 type IconName = keyof typeof Ionicons.glyphMap;
 

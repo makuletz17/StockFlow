@@ -19,7 +19,7 @@ import { Badge, Card, EmptyState } from "@/src/components/UI";
 import { useAppStore } from "@/src/store/appStore";
 import { ReceivedStock } from "@/src/types";
 import { formatDate } from "@/src/utils/helpers";
-import { C, F, R, S, W } from "@/src/utils/themes";
+import { C, F, R, S, W } from "@/src/utils/theme";
 
 const STATUS_COLOR: Record<string, string> = {
   pending: C.accentOrange,

@@ -14,7 +14,7 @@ import {
   View,
   ViewStyle,
 } from "react-native";
-import { C, F, R, S, W } from "../utils/themes";
+import { C, F, R, S, W } from "../utils/theme";
 
 // ─────────────────────────────────────────────────────────────
 // Button
@@ -27,7 +27,7 @@ interface ButtonProps {
   loading?: boolean;
   disabled?: boolean;
   icon?: keyof typeof Ionicons.glyphMap;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
   fullWidth?: boolean;
 }
 
@@ -119,7 +119,7 @@ interface InputProps extends TextInputProps {
   icon?: keyof typeof Ionicons.glyphMap;
   rightIcon?: keyof typeof Ionicons.glyphMap;
   onRightIconPress?: () => void;
-  containerStyle?: ViewStyle;
+  containerStyle?: StyleProp<ViewStyle>;
 }
 
 export const Input: React.FC<InputProps> = ({
@@ -237,9 +237,9 @@ const card = StyleSheet.create({
 // ─────────────────────────────────────────────────────────────
 // Divider
 // ─────────────────────────────────────────────────────────────
-export const Divider: React.FC<{ style?: ViewStyle }> = ({ style }) => (
-  <View style={[{ height: 1, backgroundColor: C.border }, style]} />
-);
+export const Divider: React.FC<{ style?: StyleProp<ViewStyle> }> = ({
+  style,
+}) => <View style={[{ height: 1, backgroundColor: C.border }, style]} />;
 
 // ─────────────────────────────────────────────────────────────
 // Badge
@@ -271,7 +271,7 @@ export const SectionHeader: React.FC<{
   title: string;
   subtitle?: string;
   action?: { label: string; onPress: () => void };
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
 }> = ({ title, subtitle, action, style }) => (
   <View style={[sh.row, style]}>
     <View style={{ flex: 1 }}>

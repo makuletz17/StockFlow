@@ -1,7 +1,7 @@
 // app/(app)/(tabs)/_layout.tsx
 
-import { useAppStore } from "@/store/appStore";
-import { C, F, W } from "@/utils/theme";
+import { useAppStore } from "@/src/store/appStore";
+import { C, F, W } from "@/src/utils/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import { Platform, StyleSheet } from "react-native";

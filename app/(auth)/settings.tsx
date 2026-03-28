@@ -1,3 +1,9 @@
+// app/(auth)/settings.tsx
+//
+// Pre-login settings screen:
+//   • Configure the API base URL
+//   • Preview + select a store (saved locally for later use after login)
+
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
@@ -25,7 +31,7 @@ import {
 import { useAppStore } from "@/src/store/appStore";
 import { Store } from "@/src/types";
 import { getErrorMessage } from "@/src/utils/helpers";
-import { C, F, R, S, W } from "@/src/utils/themes";
+import { C, F, R, S, W } from "@/src/utils/theme";
 
 const { width } = Dimensions.get("window");
 const IS_TABLET = width >= 768;
@@ -80,12 +86,8 @@ export default function SettingsScreen() {
     setLoadingURL(true);
     try {
       await api.setBaseURL(trimmed);
-      const res = await tryLoadStores();
-      if (res === undefined) {
-        Alert.alert("Error", "Error saving the store");
-      } else {
-        Alert.alert("Saved", "API URL updated successfully.");
-      }
+      await tryLoadStores();
+      Alert.alert("Saved", "API URL updated successfully.");
     } catch (err) {
       Alert.alert("Error", getErrorMessage(err));
     } finally {
@@ -145,7 +147,7 @@ export default function SettingsScreen() {
             autoCorrect={false}
             keyboardType="url"
             error={urlError}
-            hint="Example: https://your-server.com/api/v1"
+            hint="Example: http://192.168.1.100:8000/api/v1"
             returnKeyType="done"
             onSubmitEditing={handleSaveURL}
           />

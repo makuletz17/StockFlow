@@ -1,3 +1,5 @@
+// src/utils/theme.ts
+
 export const C = {
   // brand
   primary: "#3B82F6", // blue-500

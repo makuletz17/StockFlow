@@ -1,3 +1,5 @@
+// app/(app)/(tabs)/receive.tsx  — Receive Stock
+
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useState } from "react";
 import {
@@ -19,7 +21,7 @@ import { useNetwork } from "@/src/hooks/useNetwork";
 import { useAppStore } from "@/src/store/appStore";
 import { Item, ReceivedStock, Supplier } from "@/src/types";
 import { generateId, getErrorMessage, todayISO } from "@/src/utils/helpers";
-import { C, F, R, S, W } from "@/src/utils/themes";
+import { C, F, R, S, W } from "@/src/utils/theme";
 
 export default function ReceiveStockScreen() {
   const { selectedStore, addOfflineRecord } = useAppStore();

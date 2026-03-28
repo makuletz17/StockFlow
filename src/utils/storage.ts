@@ -1,3 +1,9 @@
+// src/utils/storage.ts
+//
+// Wraps expo-secure-store for native and localStorage for web.
+// Avoids the "AsyncStorage native module is null" error that
+// happens with @react-native-async-storage in newer Expo Go builds.
+
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 

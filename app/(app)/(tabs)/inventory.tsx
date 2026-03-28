@@ -41,7 +41,7 @@ import {
   getErrorMessage,
   rowsToCSV,
 } from "@/src/utils/helpers";
-import { C, F, R, S, W } from "@/src/utils/themes";
+import { C, F, R, S, W } from "@/src/utils/theme";
 
 const CATEGORIES = [
   "Grocery",
@@ -66,27 +66,32 @@ const UNITS = [
   "SET",
 ];
 
-// ─── Encoding Modal ──────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// EncodeModal
+// ─────────────────────────────────────────────────────────────
+interface EncodeModalProps {
+  visible: boolean;
+  onClose: () => void;
+  onSaved: (item: InventoryItem) => void;
+  existing?: InventoryItem | null;
+  storeId?: number;
+}
+
 function EncodeModal({
   visible,
   onClose,
   onSaved,
   existing,
   storeId,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  onSaved: (item: InventoryItem) => void;
-  existing?: InventoryItem | null;
-  storeId?: number;
-}) {
+}: EncodeModalProps) {
   const { isOnline } = useNetwork();
   const { addOfflineRecord } = useAppStore();
+
   const [scanner, setScanner] = useState(false);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const [form, setForm] = useState<InventoryItem>({
+  const blank: InventoryItem = {
     barcode: "",
     sku: "",
     description: "",
@@ -96,39 +101,31 @@ function EncodeModal({
     min_stock: 0,
     cost_price: 0,
     selling_price: 0,
-  });
+  };
+
+  const [form, setForm] = useState<InventoryItem>(blank);
 
   useEffect(() => {
     if (visible) {
-      setForm(
-        existing ?? {
-          barcode: "",
-          sku: "",
-          description: "",
-          category: "",
-          unit: "",
-          stock: 0,
-          min_stock: 0,
-          cost_price: 0,
-          selling_price: 0,
-        },
-      );
+      setForm(existing ?? blank);
       setErrors({});
     }
   }, [visible, existing]);
 
-  const set = (k: keyof InventoryItem) => (v: string) =>
+  const setField = (k: keyof InventoryItem) => (v: string) =>
     setForm((f) => ({ ...f, [k]: v }));
 
-  const validate = () => {
+  const clearError = (k: string) => setErrors((e) => ({ ...e, [k]: "" }));
+
+  const validate = (): boolean => {
     const e: Record<string, string> = {};
     if (!form.barcode.trim()) e.barcode = "Required";
     if (!form.sku.trim()) e.sku = "Required";
     if (!form.description.trim()) e.description = "Required";
-    if (!form.category) e.category = "Select category";
-    if (!form.unit) e.unit = "Select unit";
+    if (!form.category) e.category = "Select a category";
+    if (!form.unit) e.unit = "Select a unit";
     setErrors(e);
-    return !Object.keys(e).length;
+    return Object.keys(e).length === 0;
   };
 
   const handleSave = async () => {
@@ -150,12 +147,9 @@ function EncodeModal({
 
     setSaving(true);
     try {
-      let saved: InventoryItem;
-      if (existing?.id) {
-        saved = await api.updateInventoryItem(existing.id, payload);
-      } else {
-        saved = await api.createInventoryItem(payload);
-      }
+      const saved = existing?.id
+        ? await api.updateInventoryItem(existing.id, payload)
+        : await api.createInventoryItem(payload);
       onSaved(saved);
       onClose();
     } catch (err) {
@@ -185,7 +179,8 @@ function EncodeModal({
           behavior={Platform.OS === "ios" ? "padding" : undefined}>
           <ScrollView
             contentContainerStyle={em.content}
-            keyboardShouldPersistTaps="handled">
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}>
             <Card>
               <SectionHeader title="Identification" />
               <View style={em.barcodeRow}>
@@ -193,11 +188,11 @@ function EncodeModal({
                   label="Barcode"
                   value={form.barcode}
                   onChangeText={(t) => {
-                    set("barcode")(t);
-                    setErrors((e) => ({ ...e, barcode: "" }));
+                    setField("barcode")(t);
+                    clearError("barcode");
                   }}
                   icon="barcode-outline"
-                  placeholder="Scan or type"
+                  placeholder="Scan or type barcode"
                   autoCapitalize="none"
                   error={errors.barcode}
                   containerStyle={{ flex: 1, marginBottom: 0 }}
@@ -212,8 +207,8 @@ function EncodeModal({
                 label="SKU"
                 value={form.sku}
                 onChangeText={(t) => {
-                  set("sku")(t);
-                  setErrors((e) => ({ ...e, sku: "" }));
+                  setField("sku")(t);
+                  clearError("sku");
                 }}
                 icon="pricetag-outline"
                 placeholder="Stock keeping unit"
@@ -228,8 +223,8 @@ function EncodeModal({
                 label="Description"
                 value={form.description}
                 onChangeText={(t) => {
-                  set("description")(t);
-                  setErrors((e) => ({ ...e, description: "" }));
+                  setField("description")(t);
+                  clearError("description");
                 }}
                 icon="text-outline"
                 placeholder="Full product name"
@@ -237,47 +232,52 @@ function EncodeModal({
               />
 
               <Text style={em.chipLabel}>
-                Category{" "}
+                {"Category"}
                 {errors.category ? (
-                  <Text style={{ color: C.error }}>*</Text>
+                  <Text style={{ color: C.error }}>{"  *"}</Text>
                 ) : null}
               </Text>
               <View style={em.chips}>
-                {CATEGORIES.map((c) => (
+                {CATEGORIES.map((cat) => (
                   <TouchableOpacity
-                    key={c}
-                    style={[em.chip, form.category === c && em.chipActive]}
+                    key={cat}
+                    style={[em.chip, form.category === cat && em.chipActive]}
                     onPress={() => {
-                      set("category")(c);
-                      setErrors((e) => ({ ...e, category: "" }));
+                      setField("category")(cat);
+                      clearError("category");
                     }}>
                     <Text
                       style={[
                         em.chipTxt,
-                        form.category === c && em.chipTxtActive,
+                        form.category === cat && em.chipTxtActive,
                       ]}>
-                      {c}
+                      {cat}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </View>
 
               <Text style={[em.chipLabel, { marginTop: S.md }]}>
-                Unit{" "}
-                {errors.unit ? <Text style={{ color: C.error }}>*</Text> : null}
+                {"Unit"}
+                {errors.unit ? (
+                  <Text style={{ color: C.error }}>{"  *"}</Text>
+                ) : null}
               </Text>
               <View style={em.chips}>
-                {UNITS.map((u) => (
+                {UNITS.map((unit) => (
                   <TouchableOpacity
-                    key={u}
-                    style={[em.chip, form.unit === u && em.chipActive]}
+                    key={unit}
+                    style={[em.chip, form.unit === unit && em.chipActive]}
                     onPress={() => {
-                      set("unit")(u);
-                      setErrors((e) => ({ ...e, unit: "" }));
+                      setField("unit")(unit);
+                      clearError("unit");
                     }}>
                     <Text
-                      style={[em.chipTxt, form.unit === u && em.chipTxtActive]}>
-                      {u}
+                      style={[
+                        em.chipTxt,
+                        form.unit === unit && em.chipTxtActive,
+                      ]}>
+                      {unit}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -353,6 +353,7 @@ function EncodeModal({
           onClose={() => setScanner(false)}
           onScanned={(code) => {
             setForm((f) => ({ ...f, barcode: code }));
+            clearError("barcode");
           }}
           title="Scan Barcode"
         />
@@ -372,7 +373,7 @@ const em = StyleSheet.create({
     borderBottomColor: C.border,
   },
   title: { fontSize: F.xl, fontWeight: W.bold, color: C.textPrimary },
-  content: { padding: S.lg, paddingBottom: 60, gap: S.sm },
+  content: { padding: S.lg, paddingBottom: 60 },
   barcodeRow: {
     flexDirection: "row",
     alignItems: "flex-end",
@@ -410,7 +411,9 @@ const em = StyleSheet.create({
   row2: { flexDirection: "row" },
 });
 
-// ─── Main list screen ────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// InventoryScreen
+// ─────────────────────────────────────────────────────────────
 export default function InventoryScreen() {
   const { selectedStore } = useAppStore();
 
@@ -421,7 +424,6 @@ export default function InventoryScreen() {
   const [category, setCategory] = useState("");
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
-
   const [encodeModal, setEncodeModal] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [menuVisible, setMenuVisible] = useState(false);
@@ -445,7 +447,7 @@ export default function InventoryScreen() {
         store_id: selectedStore?.id,
         page: pg,
       });
-      setItems(reset ? res.data : (prev) => [...prev, ...res.data]);
+      setItems((prev) => (reset ? res.data : [...prev, ...res.data]));
       setHasMore(!!res.pagination && pg < res.pagination.total_pages);
       if (!reset) setPage(pg + 1);
     } catch {
@@ -479,7 +481,6 @@ export default function InventoryScreen() {
     ]);
   };
 
-  // ── Export ─────────────────────────────────────────────────
   const handleExport = async () => {
     setMenuVisible(false);
     setExportLoading(true);
@@ -495,20 +496,18 @@ export default function InventoryScreen() {
             description: i.description,
             category: i.category,
             unit: i.unit,
-            stock: i.stock ?? "",
-            min_stock: i.min_stock ?? "",
-            cost_price: i.cost_price ?? "",
-            selling_price: i.selling_price ?? "",
+            stock: String(i.stock ?? 0),
+            min_stock: String(i.min_stock ?? 0),
+            cost_price: String(i.cost_price ?? 0),
+            selling_price: String(i.selling_price ?? 0),
           })),
         );
       }
-
       const fname = `inventory_${Date.now()}.csv`;
-      const dest = (FileSystem.cacheDirectory ?? "") + fname;
+      const dest = `${FileSystem.Paths.cache}${fname}`;
       await FileSystem.writeAsStringAsync(dest, csv, {
-        encoding: FileSystem.EncodingType.UTF8,
+        encoding: "utf8",
       });
-
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(dest, {
           mimeType: "text/csv",
@@ -524,7 +523,6 @@ export default function InventoryScreen() {
     }
   };
 
-  // ── Import ─────────────────────────────────────────────────
   const handleImport = async () => {
     setMenuVisible(false);
     try {
@@ -533,17 +531,15 @@ export default function InventoryScreen() {
         copyToCacheDirectory: true,
       });
       if (result.canceled || !result.assets?.[0]) return;
-
       setImportLoading(true);
       const csv = await FileSystem.readAsStringAsync(result.assets[0].uri, {
-        encoding: FileSystem.EncodingType.UTF8,
+        encoding: "utf8",
       });
       const rows = csvToRows(csv);
       if (!rows.length) {
-        Alert.alert("Empty", "No data found in file.");
+        Alert.alert("Empty File", "No data found.");
         return;
       }
-
       try {
         const res = await api.importInventoryCSV(csv, selectedStore?.id ?? 0);
         Alert.alert("Import Complete", `${res.imported} items imported.`);
@@ -551,7 +547,7 @@ export default function InventoryScreen() {
       } catch {
         Alert.alert(
           "Preview",
-          `Found ${rows.length} rows. Configure your API to import.`,
+          `Found ${rows.length} rows. Configure your API to enable full import.`,
         );
       }
     } catch (err) {
@@ -561,7 +557,7 @@ export default function InventoryScreen() {
     }
   };
 
-  const stockColor = (item: InventoryItem) => {
+  const stockColor = (item: InventoryItem): string => {
     if ((item.stock ?? 0) <= 0) return C.error;
     if (item.min_stock && (item.stock ?? 0) <= item.min_stock) return C.warning;
     return C.accent;
@@ -608,7 +604,6 @@ export default function InventoryScreen() {
 
   return (
     <SafeAreaView style={s.safe}>
-      {/* Header */}
       <View style={s.header}>
         <Text style={s.title}>Inventory</Text>
         <View style={{ flexDirection: "row", alignItems: "center", gap: S.sm }}>
@@ -627,7 +622,6 @@ export default function InventoryScreen() {
         </View>
       </View>
 
-      {/* Action menu */}
       {menuVisible && (
         <View style={s.menu}>
           <TouchableOpacity style={s.menuItem} onPress={handleImport}>
@@ -642,7 +636,6 @@ export default function InventoryScreen() {
         </View>
       )}
 
-      {/* Search */}
       <View style={s.searchBar}>
         <Ionicons
           name="search-outline"
@@ -664,28 +657,26 @@ export default function InventoryScreen() {
         )}
       </View>
 
-      {/* Category chips */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         style={s.catScroll}
         contentContainerStyle={s.catContent}>
-        {["All", ...CATEGORIES].map((c) => {
-          const active = c === "All" ? !category : category === c;
+        {["All", ...CATEGORIES].map((cat) => {
+          const active = cat === "All" ? !category : category === cat;
           return (
             <TouchableOpacity
-              key={c}
+              key={cat}
               style={[s.catChip, active && s.catChipActive]}
-              onPress={() => setCategory(c === "All" ? "" : c)}>
+              onPress={() => setCategory(cat === "All" ? "" : cat)}>
               <Text style={[s.catChipTxt, active && s.catChipTxtActive]}>
-                {c}
+                {cat}
               </Text>
             </TouchableOpacity>
           );
         })}
       </ScrollView>
 
-      {/* FAB */}
       <TouchableOpacity
         style={s.fab}
         onPress={() => {

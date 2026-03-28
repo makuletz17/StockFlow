@@ -4,15 +4,15 @@ import { Ionicons } from "@expo/vector-icons";
 import { Camera, CameraView } from "expo-camera";
 import React, { useEffect, useRef, useState } from "react";
 import {
-    Animated,
-    Dimensions,
-    Modal,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Animated,
+  Dimensions,
+  Modal,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import { C, F, R, S, W } from "../utils/themes";
+import { C, F, R, S, W } from "../utils/theme";
 
 const { width } = Dimensions.get("window");
 const FRAME = width * 0.72;

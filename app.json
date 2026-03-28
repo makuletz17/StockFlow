@@ -9,7 +9,11 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "StockFlow uses the camera to scan barcodes.",
+        "NSMicrophoneUsageDescription": "Not used."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -39,11 +43,21 @@
           }
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "StockFlow needs the camera to scan product barcodes."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "apiUrl": "http://192.168.1.100:8000/api/v1",
+      "appName": "StockFlow"
     }
   }
 }

@@ -2,7 +2,7 @@ import api from "@/src/api/apiService";
 import { Button, Input } from "@/src/components/UI";
 import { useAppStore } from "@/src/store/appStore";
 import { getErrorMessage } from "@/src/utils/helpers";
-import { C, F, R, S, W } from "@/src/utils/themes";
+import { C, F, R, S, W } from "@/src/utils/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";

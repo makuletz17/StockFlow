@@ -97,3 +97,32 @@ export interface ApiResponse<T> {
     total_pages: number;
   };
 }
+
+/**
+ * Returned by GET /api/v1/config  (or /api/v1/ping)
+ * Extend freely — the app persists whatever the server returns.
+ */
+export interface ApiConfig {
+  app_name: string;
+  version: string;
+  company?: string;
+  logo_url?: string;
+  primary_color?: string;
+  allow_register?: boolean;
+  stores?: Store[];
+  [key: string]: unknown;
+}
+
+/** Persisted after a successful ping — stored in secure storage */
+export interface ApiSettings {
+  baseUrl: string;
+  config: ApiConfig;
+  savedAt: string;
+}
+
+/** Boot phases used by the root layout */
+export type BootPhase =
+  | "checking" // querying saved URL / .env URL
+  | "no_api" // no URL configured yet
+  | "api_error" // URL set but unreachable
+  | "ready"; // API reachable, proceed to auth guard
