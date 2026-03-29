@@ -39,7 +39,7 @@ export default function DashboardScreen() {
   const pending = offlineQueue.filter((r) => !r.synced);
 
   useEffect(() => {
-    loadDashboard();
+    //loadDashboard();
   }, [selectedStore]);
 
   const loadDashboard = async () => {
@@ -60,7 +60,7 @@ export default function DashboardScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await loadDashboard();
+    //await loadDashboard();
     setRefreshing(false);
   }, [selectedStore, isOnline]);
 

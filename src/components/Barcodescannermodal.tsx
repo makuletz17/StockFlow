@@ -1,5 +1,3 @@
-// src/components/BarcodeScannerModal.tsx
-
 import { Ionicons } from "@expo/vector-icons";
 import { Camera, CameraView } from "expo-camera";
 import React, { useEffect, useRef, useState } from "react";

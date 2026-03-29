@@ -1,5 +1,3 @@
-// app/(app)/(tabs)/received-list.tsx  — Received Stocks List
-
 import { Ionicons } from "@expo/vector-icons";
 import React, { useCallback, useEffect, useState } from "react";
 import {

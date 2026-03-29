@@ -89,13 +89,6 @@ export default function MoreScreen() {
 
   const menuItems = [
     {
-      icon: "storefront-outline" as const,
-      label: "Store Settings",
-      sub: selectedStore ? selectedStore.name : "No store selected",
-      onPress: () => router.push("/(auth)/settings"),
-      color: C.primary,
-    },
-    {
       icon: "server-outline" as const,
       label: "API Server",
       sub: apiSettings?.config?.app_name ?? api.getBaseURL(),

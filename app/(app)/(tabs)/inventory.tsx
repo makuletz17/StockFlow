@@ -23,7 +23,6 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import api from "@/src/api/apiService";
-import BarcodeScannerModal from "@/src/components/BarcodeScannerModal";
 import {
   Badge,
   Button,
@@ -347,16 +346,6 @@ function EncodeModal({
             />
           </ScrollView>
         </KeyboardAvoidingView>
-
-        <BarcodeScannerModal
-          visible={scanner}
-          onClose={() => setScanner(false)}
-          onScanned={(code) => {
-            setForm((f) => ({ ...f, barcode: code }));
-            clearError("barcode");
-          }}
-          title="Scan Barcode"
-        />
       </SafeAreaView>
     </Modal>
   );

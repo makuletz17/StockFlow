@@ -1,10 +1,15 @@
 // src/types/index.ts
 
 export interface User {
-  id: number;
-  username: string;
-  name: string;
-  role: string;
+  id: number; // 0 if API doesn't return one
+  username: string; // entered at login, saved to storage
+  name: string; // defaults to username
+  role: string; // defaults to "staff"
+  token: string; // the token returned by your API
+}
+
+export interface LoginApiResponse {
+  status: string;
   token: string;
 }
 
@@ -113,10 +118,11 @@ export interface ApiConfig {
   [key: string]: unknown;
 }
 
-/** Persisted after a successful ping — stored in secure storage */
+/** Persisted after a successful ping — stored in secure storage.
+ *  config is null when ping-only mode is used (no /config endpoint needed). */
 export interface ApiSettings {
   baseUrl: string;
-  config: ApiConfig;
+  config: ApiConfig | null;
   savedAt: string;
 }
 

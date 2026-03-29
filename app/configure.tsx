@@ -1,14 +1,3 @@
-// app/configure.tsx
-//
-// Shown when:
-//   • App has no API URL configured   (first launch / after reset)
-//   • Saved API URL is unreachable    (network error on boot ping)
-//
-// Flow:
-//   User types URL → taps "Test & Save" → app pings /config
-//     ✓ Success → save URL + ApiConfig → navigate to login
-//     ✗ Error   → show error message, let user retry
-
 import { Ionicons } from "@expo/vector-icons";
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
@@ -87,63 +76,6 @@ const badge = StyleSheet.create({
   txt: { flex: 1, fontSize: F.sm, lineHeight: 20, fontWeight: W.medium },
 });
 
-// ── Saved config preview ─────────────────────────────────────
-function ConfigPreview({ config, url }: { config: ApiConfig; url: string }) {
-  return (
-    <View style={prev.wrap}>
-      <View style={prev.row}>
-        <Ionicons name="server-outline" size={15} color={C.accent} />
-        <Text style={prev.label}>Connected to</Text>
-      </View>
-      <Text style={prev.name}>{config.app_name}</Text>
-      {config.company ? <Text style={prev.sub}>{config.company}</Text> : null}
-      <Text style={prev.url}>{url}</Text>
-      <View style={prev.meta}>
-        <Text style={prev.metaTxt}>v{config.version}</Text>
-        {config.stores && config.stores.length > 0 && (
-          <Text style={prev.metaTxt}>
-            {config.stores.length} store{config.stores.length > 1 ? "s" : ""}
-          </Text>
-        )}
-      </View>
-    </View>
-  );
-}
-
-const prev = StyleSheet.create({
-  wrap: {
-    backgroundColor: C.accent + "10",
-    borderRadius: R.lg,
-    padding: S.lg,
-    borderWidth: 1,
-    borderColor: C.accent + "30",
-    marginTop: S.md,
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: S.xs,
-    marginBottom: S.xs,
-  },
-  label: {
-    fontSize: F.xs,
-    color: C.accent,
-    fontWeight: W.semibold,
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-  },
-  name: { fontSize: F.xl, fontWeight: W.bold, color: C.textPrimary },
-  sub: { fontSize: F.sm, color: C.textSecondary, marginTop: 2 },
-  url: {
-    fontSize: F.xs,
-    color: C.textTertiary,
-    marginTop: S.xs,
-    fontFamily: Platform.OS === "ios" ? "Courier New" : "monospace",
-  },
-  meta: { flexDirection: "row", gap: S.md, marginTop: S.sm },
-  metaTxt: { fontSize: F.xs, color: C.accent + "CC", fontWeight: W.medium },
-});
-
 // ── Main screen ───────────────────────────────────────────────
 export default function ConfigureScreen() {
   const router = useRouter();
@@ -192,24 +124,28 @@ export default function ConfigureScreen() {
     await api.setBaseURL(trimmed);
 
     try {
-      const config = await api.ping();
+      const isAlive = await api.ping();
 
-      // ✓ Success — persist everything
+      if (!isAlive) {
+        setStatus("error");
+        setMessage("Unable to connect to server");
+        return;
+      }
       const settings: ApiSettings = {
         baseUrl: trimmed,
-        config,
+        config: null, // no config anymore
         savedAt: new Date().toISOString(),
       };
+
       await setApiSettings(settings);
 
-      setTestedConfig(config);
+      setTestedConfig(null);
       setStatus("success");
-      setMessage(
-        `Connected!  ${config.app_name} v${config.version}` +
-          (config.company ? `  ·  ${config.company}` : ""),
-      );
+      setMessage("Connected! Server is reachable.");
+      setTimeout(() => {
+        handleProceed();
+      }, 800);
     } catch (err: unknown) {
-      // ✗ Unreachable — show friendly error
       setStatus("error");
       const raw = err instanceof Error ? err.message : String(err);
       if (
@@ -286,21 +222,23 @@ export default function ConfigureScreen() {
 
           {/* ── Already saved config preview ─────────────── */}
           {apiSettings && status === "idle" && (
-            <ConfigPreview
-              config={apiSettings.config}
-              url={apiSettings.baseUrl}
-            />
+            <View style={s.savedBanner}>
+              <Ionicons name="checkmark-circle" size={16} color={C.accent} />
+              <View style={{ flex: 1 }}>
+                <Text style={s.savedLabel}>Last connected to</Text>
+                <Text style={s.savedUrl} numberOfLines={1}>
+                  {apiSettings.baseUrl}
+                </Text>
+              </View>
+            </View>
           )}
 
           {/* ── Input card ───────────────────────────────── */}
           <Card style={s.card}>
             <Text style={s.cardTitle}>Server URL</Text>
             <Text style={s.cardSub}>
-              Enter the base URL of your StockFlow REST API. The app will call{" "}
-              <Text style={s.mono}>
-                {(url || "http://…").replace(/\/$/, "")}/config
-              </Text>{" "}
-              to verify.
+              Enter the base URL of your StockFlow REST API. The app will send a
+              connection check to verify the server is reachable.
             </Text>
 
             <Input
@@ -321,10 +259,6 @@ export default function ConfigureScreen() {
             />
 
             <StatusBadge status={status} message={message} />
-
-            {testedConfig ? (
-              <ConfigPreview config={testedConfig} url={url.trim()} />
-            ) : null}
           </Card>
 
           {/* ── Env default hint ─────────────────────────── */}
@@ -351,7 +285,7 @@ export default function ConfigureScreen() {
             {[
               'Use your machine\'s local IP, not "localhost"',
               "Make sure your device and server are on the same Wi-Fi",
-              "The API must return { success: true, data: { app_name, version } } at GET /config",
+              "Any HTTP response from the server counts as reachable",
             ].map((tip, i) => (
               <View key={i} style={s.tipRow}>
                 <View style={s.tipDot} />
@@ -409,6 +343,24 @@ const s = StyleSheet.create({
   title: { fontSize: F.xl, fontWeight: W.bold, color: C.textPrimary },
   sub: { fontSize: F.sm, color: C.textTertiary, marginTop: 2 },
 
+  savedBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: S.sm,
+    backgroundColor: C.accent + "12",
+    borderRadius: R.md,
+    padding: S.md,
+    borderWidth: 1,
+    borderColor: C.accent + "30",
+  },
+  savedLabel: { fontSize: F.xs, color: C.accent, fontWeight: W.semibold },
+  savedUrl: {
+    fontSize: F.sm,
+    color: C.textSecondary,
+    fontFamily: Platform.OS === "ios" ? "Courier New" : "monospace",
+    marginTop: 2,
+  },
+
   card: {},
   cardTitle: {
     fontSize: F.lg,
@@ -435,11 +387,11 @@ const s = StyleSheet.create({
   envHintTxt: { flex: 1, fontSize: F.xs, color: C.primary, lineHeight: 18 },
 
   tipsCard: {
-    backgroundColor: C.bgCard,
     borderRadius: R.lg,
     padding: S.lg,
     borderWidth: 1,
     borderColor: C.border,
+    backgroundColor: C.bgCard,
   },
   tipsTitle: {
     fontSize: F.sm,

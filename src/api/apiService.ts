@@ -1,20 +1,7 @@
-// src/api/apiService.ts
-//
-// Boot flow
-// ─────────
-// 1. init() is called once on app start.
-// 2. It resolves the base URL in priority order:
-//      a. Saved override in secure storage  (user-configured)
-//      b. EXPO_PUBLIC_API_URL from .env      (build-time default)
-//      c. Nothing — URL stays empty, boot phase becomes 'no_api'
-// 3. ping() hits GET /api/v1/config and returns ApiConfig.
-//    The caller (root _layout) stores the result in Zustand + secure storage.
-// 4. All subsequent requests use the resolved URL with a Bearer token.
-
 import axios, { AxiosInstance, AxiosResponse } from "axios";
+import { encode as btoa } from "base-64";
 import Constants from "expo-constants";
 import {
-  ApiConfig,
   ApiResponse,
   DashboardSummary,
   InventoryItem,
@@ -54,18 +41,29 @@ class ApiService {
     // Attach token on every request
     this.http.interceptors.request.use(async (cfg) => {
       const token = await storage.get(KEY_TOKEN);
-      if (token) cfg.headers.Authorization = `Bearer ${token}`;
+      console.log("Interceptor Token:", token);
+      if (token) cfg.headers["x-token"] = token;
       return cfg;
     });
 
     // Global 401 handler
     this.http.interceptors.response.use(
-      (r) => r,
-      async (err) => {
-        if (err?.response?.status === 401) {
-          await storage.remove(KEY_TOKEN);
-          await storage.remove("sf_user");
+      async (res) => {
+        const newToken = res.data?.token;
+        if (newToken) {
+          await storage.set(KEY_TOKEN, newToken);
         }
+
+        return res;
+      },
+      async (err) => {
+        const status = err?.response?.status;
+        const message = err?.response?.data?.message;
+
+        if (status === 401 || message === "please renew your access!") {
+          await this.logout();
+        }
+
         return Promise.reject(err);
       },
     );
@@ -106,55 +104,78 @@ class ApiService {
     this.http.defaults.baseURL = getEnvUrl();
   }
 
-  // ── Ping / Config ──────────────────────────────────────────
+  // ── Test ping ───────────────────────────────────────────────────
+  // ok
+  async ping(): Promise<boolean> {
+    try {
+      await this.http.head("/", { timeout: 8_000 });
+      return true;
+    } catch (err: unknown) {
+      // Any HTTP error response (4xx/5xx) still means the server answered
+      const e = err as Record<string, unknown>;
+      if (e && e["response"] !== undefined) {
+        return true;
+      }
+      // Network-level failure — truly unreachable
+      return false;
+    }
+  }
 
-  /**
-   * Hits GET /api/v1/config
-   * Used on boot to verify the API is reachable and to fetch server settings.
-   *
-   * Expected response:
-   * {
-   *   "success": true,
-   *   "data": {
-   *     "app_name": "StockFlow API",
-   *     "version": "1.0.0",
-   *     "company": "Your Company",
-   *     "stores": [ ... ]   // optional pre-load
-   *   }
-   * }
-   *
-   * Throws if unreachable or server returns an error.
-   */
-  async ping(): Promise<ApiConfig> {
-    const res: AxiosResponse<ApiResponse<ApiConfig>> = await this.http.get(
-      "/config",
-      { timeout: 8_000 },
-    );
+  // ── Warehouse ──────────────────────────────────────────────
+  async getPOByNumber(poNo: string): Promise<{
+    status: string;
+    record: any;
+    invoiceTypes: { id: number; text: string }[];
+    tradeDiscounting: { id: number; text: string }[];
+  }> {
+    const res = await this.http.get(`/wh/${poNo}`, {
+      headers: {
+        ...this.http.defaults.headers.common,
+        "x-scopecode": "MQ==",
+      },
+    });
     return res.data.data;
   }
 
   // ── Auth ───────────────────────────────────────────────────
-
+  // ok
   async login(username: string, password: string): Promise<User> {
-    const res: AxiosResponse<ApiResponse<User>> = await this.http.post(
-      "/auth/login",
-      { username, password },
-    );
-    const user = res.data.data;
-    await storage.set(KEY_TOKEN, user.token);
-    await storage.set("sf_user", JSON.stringify(user));
-    return user;
+    const credential = `${username}<:>${btoa(password)}`;
+    const res = await this.http.post("/login", {
+      headers: { Authorization: credential },
+    });
+
+    const { token, status } = res.data;
+
+    if (status === "success" && token) {
+      const user: User = {
+        id: 0,
+        username: username,
+        name: username,
+        role: "staff",
+        token: token,
+      };
+
+      await storage.set("sf_user", JSON.stringify(user));
+      await storage.set("sf_username", username);
+
+      return user;
+    } else {
+      throw new Error(
+        "Login failed: " + (res.data?.message || "Invalid credentials"),
+      );
+    }
   }
 
+  //log out ok
   async logout(): Promise<void> {
     try {
-      await this.http.post("/auth/logout");
-    } catch {
-      /* ignore */
-    }
+      await this.http.post("/logout");
+    } catch {}
     await Promise.all([
       storage.remove(KEY_TOKEN),
       storage.remove("sf_user"),
+      storage.remove("sf_username"),
       storage.remove("sf_store"),
     ]);
   }

@@ -29,7 +29,7 @@ const TABS: TabConfig[] = [
     activeIcon: "add-circle",
   },
   {
-    name: "received-list",
+    name: "receive-list",
     title: "Received",
     icon: "receipt-outline",
     activeIcon: "receipt",

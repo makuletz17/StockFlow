@@ -6,12 +6,9 @@
 
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
   Dimensions,
-  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -21,16 +18,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import api from "@/src/api/apiService";
-import {
-  Button,
-  Card,
-  Divider,
-  Input,
-  SectionHeader,
-} from "@/src/components/UI";
-import { useAppStore } from "@/src/store/appStore";
-import { Store } from "@/src/types";
-import { getErrorMessage } from "@/src/utils/helpers";
+import { Button, Card, Input, SectionHeader } from "@/src/components/UI";
 import { C, F, R, S, W } from "@/src/utils/theme";
 
 const { width } = Dimensions.get("window");
@@ -38,67 +26,19 @@ const IS_TABLET = width >= 768;
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const { selectedStore, setSelectedStore } = useAppStore();
+  //const { selectedStore, setSelectedStore } = useAppStore();
 
   const [baseURL, setBaseURL] = useState("");
-  const [stores, setStores] = useState<Store[]>([]);
+  //const [stores, setStores] = useState<Store[]>([]);
   const [loadingURL, setLoadingURL] = useState(false);
-  const [loadingList, setLoadingList] = useState(false);
+  //const [loadingList, setLoadingList] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [urlError, setUrlError] = useState("");
 
   // ── Init ───────────────────────────────────────────────────
   useEffect(() => {
-    setBaseURL(api.getBaseURL());
-    tryLoadStores();
+    setBaseURL(btoa(api.getBaseURL()));
   }, []);
-
-  const tryLoadStores = async () => {
-    setLoadingList(true);
-    try {
-      const data = await api.getStores();
-      setStores(data);
-    } catch {
-      // API not reachable yet — that's fine
-    } finally {
-      setLoadingList(false);
-    }
-  };
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await tryLoadStores();
-    setRefreshing(false);
-  }, []);
-
-  // ── Save base URL ──────────────────────────────────────────
-  const handleSaveURL = async () => {
-    const trimmed = baseURL.trim();
-    if (!trimmed) {
-      setUrlError("Please enter a valid URL");
-      return;
-    }
-    if (!trimmed.startsWith("http")) {
-      setUrlError("URL must start with http:// or https://");
-      return;
-    }
-    setUrlError("");
-    setLoadingURL(true);
-    try {
-      await api.setBaseURL(trimmed);
-      await tryLoadStores();
-      Alert.alert("Saved", "API URL updated successfully.");
-    } catch (err) {
-      Alert.alert("Error", getErrorMessage(err));
-    } finally {
-      setLoadingURL(false);
-    }
-  };
-
-  // ── Select store ───────────────────────────────────────────
-  const handleSelectStore = (store: Store) => {
-    setSelectedStore(store);
-  };
 
   // ── UI ─────────────────────────────────────────────────────
   return (
@@ -119,176 +59,39 @@ export default function SettingsScreen() {
         style={{ flex: 1 }}
         contentContainerStyle={[s.content, IS_TABLET && s.contentTablet]}
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={C.primary}
-          />
-        }
         keyboardShouldPersistTaps="handled">
         {/* ── API URL card ────────────────────────────────── */}
         <Card style={s.section}>
           <SectionHeader
             title="Server Configuration"
-            subtitle="Set the base URL of your StockFlow REST API"
+            subtitle="Your API is already configured and ready to use"
           />
 
           <Input
             label="API Base URL"
             value={baseURL}
-            onChangeText={(t) => {
-              setBaseURL(t);
-              setUrlError("");
-            }}
-            icon="globe-outline"
-            placeholder="https://your-server.com/api/v1"
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="url"
-            error={urlError}
-            hint="Example: http://192.168.1.100:8000/api/v1"
-            returnKeyType="done"
-            onSubmitEditing={handleSaveURL}
+            editable={false}
+            icon="lock-closed-outline"
           />
 
-          <Button
-            title="Save & Connect"
-            onPress={handleSaveURL}
-            loading={loadingURL}
-            icon="save-outline"
-          />
-
-          {/* Tip */}
-          <View style={s.tip}>
-            <Ionicons
-              name="information-circle-outline"
-              size={16}
-              color={C.primary}
-            />
-            <Text style={s.tipText}>
-              Use your local IP (not localhost) when testing on a physical
-              device.
+          {/* Status */}
+          <View style={s.successBox}>
+            <Ionicons name="checkmark-circle" size={18} color={C.success} />
+            <Text style={s.successText}>
+              Configuration is valid and ready to use.
             </Text>
           </View>
         </Card>
 
-        {/* ── Active store indicator ──────────────────────── */}
-        {selectedStore && (
-          <Card style={[s.section, s.activeCard]}>
-            <View style={s.activeRow}>
-              <View style={s.activeIconBox}>
-                <Ionicons name="storefront" size={22} color={C.accent} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={s.activeLabel}>Active Store</Text>
-                <Text style={s.activeName}>{selectedStore.name}</Text>
-                <Text style={s.activeCode}>
-                  {selectedStore.code}
-                  {selectedStore.city ? `  ·  ${selectedStore.city}` : ""}
-                </Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => setSelectedStore(null)}
-                hitSlop={10}>
-                <Ionicons
-                  name="close-circle"
-                  size={22}
-                  color={C.textTertiary}
-                />
-              </TouchableOpacity>
-            </View>
-          </Card>
-        )}
-
-        {/* ── Store list ──────────────────────────────────── */}
-        <Card style={s.section}>
-          <SectionHeader
-            title="Select Store"
-            subtitle={
-              loadingList
-                ? "Fetching stores…"
-                : `${stores.length} store${stores.length !== 1 ? "s" : ""} found`
-            }
-            action={{ label: "Refresh", onPress: tryLoadStores }}
-          />
-
-          {loadingList ? (
-            <ActivityIndicator
-              color={C.primary}
-              style={{ paddingVertical: S.xl }}
-            />
-          ) : stores.length === 0 ? (
-            <View style={s.noStores}>
-              <Ionicons
-                name="storefront-outline"
-                size={36}
-                color={C.textTertiary}
-              />
-              <Text style={s.noStoresTitle}>No stores loaded</Text>
-              <Text style={s.noStoresSub}>
-                Save a valid API URL above and tap Refresh.
-              </Text>
-            </View>
-          ) : (
-            stores.map((store, idx) => {
-              const isSelected = selectedStore?.id === store.id;
-              return (
-                <React.Fragment key={store.id}>
-                  <TouchableOpacity
-                    style={[s.storeRow, isSelected && s.storeRowSelected]}
-                    onPress={() => handleSelectStore(store)}
-                    activeOpacity={0.7}>
-                    {/* Icon */}
-                    <View
-                      style={[s.storeIcon, isSelected && s.storeIconSelected]}>
-                      <Ionicons
-                        name="storefront-outline"
-                        size={18}
-                        color={isSelected ? C.primary : C.textTertiary}
-                      />
-                    </View>
-
-                    {/* Info */}
-                    <View style={{ flex: 1 }}>
-                      <Text
-                        style={[
-                          s.storeName,
-                          isSelected && { color: C.primary },
-                        ]}>
-                        {store.name}
-                      </Text>
-                      <Text style={s.storeCode}>
-                        {store.code}
-                        {store.city ? `  ·  ${store.city}` : ""}
-                      </Text>
-                    </View>
-
-                    {/* Checkmark */}
-                    {isSelected ? (
-                      <Ionicons
-                        name="checkmark-circle"
-                        size={22}
-                        color={C.primary}
-                      />
-                    ) : (
-                      <Ionicons
-                        name="chevron-forward"
-                        size={18}
-                        color={C.textTertiary}
-                      />
-                    )}
-                  </TouchableOpacity>
-
-                  {idx < stores.length - 1 && (
-                    <Divider style={{ marginVertical: S.xs, marginLeft: 54 }} />
-                  )}
-                </React.Fragment>
-              );
-            })
-          )}
-        </Card>
-
+        <Button
+          title="Change API URL"
+          onPress={() => {
+            // navigate to configure screen or enable edit mode
+            router.push("/configure");
+          }}
+          variant="secondary"
+          icon="create-outline"
+        />
         {/* ── Back to login ────────────────────────────────── */}
         <Button
           title="Back to Login"
@@ -325,17 +128,21 @@ const s = StyleSheet.create({
 
   section: {},
 
-  // API tip
-  tip: {
+  successBox: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     gap: S.sm,
     marginTop: S.md,
-    backgroundColor: C.primary + "12",
+    backgroundColor: C.success + "12",
     borderRadius: R.md,
     padding: S.md,
   },
-  tipText: { flex: 1, fontSize: F.xs, color: C.primary, lineHeight: 18 },
+  successText: {
+    flex: 1,
+    fontSize: F.sm,
+    color: C.success,
+    fontWeight: W.medium,
+  },
 
   // Active store card
   activeCard: {

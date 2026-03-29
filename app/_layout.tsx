@@ -5,29 +5,22 @@
 //  App opens
 //     │
 //     ▼
-//  [checking]  ← init() resolves URL from storage OR .env
+//  [checking]
 //     │
-//     ├─ no URL configured ──────────────► [no_api]  → /configure
+//     ├─ no URL saved anywhere ──────────► [no_api]   → /configure
 //     │
-//     ├─ URL found → ping() ─────────────►
+//     ├─ URL found + apiSettings cached ─► [ready]    (skip ping on reload)
 //     │       │
-//     │       ├─ success → save ApiConfig ► [ready]
-//     │       │                                │
-//     │       │                          isAuthenticated?
-//     │       │                          Yes → /(app)/(tabs)
-//     │       │                          No  → /(auth)/login
-//     │       │
-//     │       └─ network error ──────────► [api_error] → /configure
-//     │                                      (shows retry button)
+//     │       ├─ isAuthenticated → /(app)/(tabs)
+//     │       └─ not logged in   → /(auth)/login
 //     │
-//     └─ URL found but blank string ─────► [no_api]
+//     └─ URL found but no cached settings → ping()
+//             │
+//             ├─ true  → save settings → [ready]
+//             └─ false → [api_error]   → /configure
 //
-// ─── Key design decisions ──────────────────────────────────────────────────
-//  • .env EXPO_PUBLIC_API_URL is the build-time default
-//  • User can override from configure screen → saved in secure storage
-//  • After successful ping the full ApiConfig JSON is persisted
-//  • On next cold boot we still re-ping (don't trust the cache),
-//    but show the cached name while checking
+// Key: if apiSettings already exist in storage we TRUST them and skip
+// the ping. The user can force a re-test from the configure screen.
 
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useRouter, useSegments } from "expo-router";
@@ -173,6 +166,20 @@ const sp = StyleSheet.create({
   pillTxt: { fontSize: F.sm, color: C.textSecondary, fontWeight: W.medium },
 });
 
+// ── Helper — reads ApiSettings directly from storage ─────────
+// We call this instead of reading from Zustand because loadState()
+// is async and Zustand state updates are not instant in the same tick.
+async function getStoredApiSettings() {
+  const { storage } = await import("@/src/utils/storage");
+  const raw = await storage.get("sf_api_settings");
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
 // ── Root layout ───────────────────────────────────────────────
 export default function RootLayout() {
   const router = useRouter();
@@ -193,64 +200,76 @@ export default function RootLayout() {
   const boot = async () => {
     setPhase("checking");
 
-    // 1. Hydrate Zustand from secure storage
+    // 1. Hydrate Zustand from secure storage (user, store, apiSettings)
     await loadState();
 
-    // 2. Resolve base URL (storage override → .env default)
+    // 2. Resolve base URL: saved override → .env default
     const url = await api.init();
 
     if (!url) {
-      // No URL at all → must configure
+      // No URL configured anywhere → send to configure screen
       setPhase("no_api");
       setBootDone(true);
       return;
     }
 
-    // 3. Ping the API
-    try {
-      const config = await api.ping();
+    // 3. Check if we already have saved apiSettings from a previous session.
+    //    If yes, TRUST them and skip the ping — avoids showing /configure
+    //    on every reload just because the network is momentarily slow.
+    //    The user can always re-test from the configure screen.
+    const stored = await getStoredApiSettings();
 
-      // 4. Persist the full config
+    if (stored) {
+      // Already verified before — go straight to auth check
+      setPhase("ready");
+      setBootDone(true);
+      return;
+    }
+
+    // 4. First time with this URL — ping to verify reachability
+    const reachable = await api.ping();
+
+    if (reachable) {
       const settings: ApiSettings = {
         baseUrl: api.getBaseURL(),
-        config,
+        config: null,
         savedAt: new Date().toISOString(),
       };
       await setApiSettings(settings);
-
-      // If the server pre-loaded stores, cache them
-      // (the settings screen will use them without an extra call)
-
       setPhase("ready");
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setErrorMsg(msg);
+    } else {
+      setErrorMsg("Server is not reachable. Check the URL and network.");
       setPhase("api_error");
-    } finally {
-      setBootDone(true);
     }
+
+    setBootDone(true);
   };
 
-  // ── Navigation guard (runs after boot + on auth change) ───
+  // ── Navigation guard ──────────────────────────────────────
   useEffect(() => {
     if (!bootDone) return;
 
-    const inConfigure = segments[0] === "configure";
-    const inAuth = segments[0] === "(auth)";
+    // segments[0] gives the first route segment e.g. 'configure', '(auth)', '(app)'
+    const onConfigure = segments[0] === "configure";
+    const onAuth = segments[0] === "(auth)";
+    const onApp = segments[0] === "(app)";
 
-    switch (phase) {
-      case "no_api":
-      case "api_error":
-        if (!inConfigure) router.replace("/configure");
-        break;
-
-      case "ready":
-        if (isAuthenticated && inAuth) router.replace("/(app)/(tabs)");
-        if (!isAuthenticated && !inAuth && !inConfigure)
-          router.replace("/(auth)/login");
-        break;
+    if (phase === "no_api" || phase === "api_error") {
+      // Must configure first — always push to configure unless already there
+      if (!onConfigure) router.replace("/configure");
+      return;
     }
-  }, [bootDone, phase, isAuthenticated]);
+
+    if (phase === "ready") {
+      if (isAuthenticated) {
+        // Logged in — go to dashboard unless already in app
+        if (!onApp) router.replace("/(app)/(tabs)");
+      } else {
+        // Not logged in — go to login unless already there or on configure
+        if (!onAuth && !onConfigure) router.replace("/(auth)/login");
+      }
+    }
+  }, [bootDone, phase, isAuthenticated, segments]);
 
   // ── Show splash while booting ──────────────────────────────
   if (!bootDone || phase === "checking") {
