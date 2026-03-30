@@ -1,16 +1,69 @@
-// src/types/index.ts
-
+// user ----------------------------------
 export interface User {
   username: string; // entered at login, saved to storage
   name: string; // defaults to username
-  token: string; // the token returned by your API
+  token: string; // the token returned by API
 }
 
+//user login
 export interface LoginApiResponse {
   status: string;
   token: string;
 }
+//end user ----------------------------------
 
+//received tabs ---------------------------------------
+export type DeliveryStatus = "pending" | "delivered" | "partial";
+
+export interface ReceivedItem {
+  recid: string | number;
+  itemDesc: string;
+  itemCode?: string;
+  barcode?: string;
+  factor?: string;
+  uom?: string;
+  poQty: number;
+  qtyDelivered: number;
+  receivedQty: number;
+  nonPoQty?: number;
+  cost: number | string;
+  status: DeliveryStatus;
+  remark?: string;
+  isManuallyAdded?: boolean;
+}
+
+export interface DropdownOption {
+  id: number;
+  text: string;
+}
+
+export interface InvoiceForm {
+  invoiceType: DropdownOption | null;
+  tradeDiscount: DropdownOption | null;
+  invNo: string;
+  invDate: string;
+  supplierInvoiceNo: string;
+  invRemark: string;
+  itemExpiry: string;
+  freight: string;
+  vatAmount: string;
+  discountAmount: string;
+  applyTradeDiscount?: boolean;
+}
+
+export interface DraftRecord {
+  id: string;
+  poNumber: string;
+  poData: any;
+  invoiceForm: InvoiceForm;
+  items: ReceivedItem[];
+  savedAt: string;
+  submitted: boolean;
+  invoiceTypes: DropdownOption[];
+  tradeDiscounting: DropdownOption[];
+  totalAmount?: number;
+}
+//end of received tabs ---------------------------------------
 export interface Store {
   id: number;
   code: string;
@@ -101,26 +154,10 @@ export interface ApiResponse<T> {
   };
 }
 
-/**
- * Returned by GET /api/v1/config  (or /api/v1/ping)
- * Extend freely — the app persists whatever the server returns.
- */
-export interface ApiConfig {
-  app_name: string;
-  version: string;
-  company?: string;
-  logo_url?: string;
-  primary_color?: string;
-  allow_register?: boolean;
-  stores?: Store[];
-  [key: string]: unknown;
-}
-
-/** Persisted after a successful ping — stored in secure storage.
- *  config is null when ping-only mode is used (no /config endpoint needed). */
+//api setting
 export interface ApiSettings {
   baseUrl: string;
-  config: ApiConfig | null;
+  config: null;
   savedAt: string;
 }
 

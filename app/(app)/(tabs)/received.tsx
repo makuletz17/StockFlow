@@ -17,100 +17,97 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import api from "@/src/api/apiService";
+import BarcodeScannerModal from "@/src/components/BarcodeScannerModal";
+import { STATUS_CONFIG } from "@/src/components/Constants";
 import { Card, Input, SectionHeader } from "@/src/components/UI";
 import { useNetwork } from "@/src/hooks/useNetwork";
-import { C, F, R, S, W } from "@/src/utils/theme";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type DeliveryStatus = "pending" | "delivered" | "partial" | "missing";
-
-interface ReceivedItem {
-  recid: string | number;
-  itemDesc: string;
-  itemCode?: string;
-  barcode?: string;
-  factor?: string;
-  uom?: string;
-  poQty: number;
-  qtyDelivered: number;
-  receivedQty: number;
-  cost: number | string;
-  status: DeliveryStatus;
-  remark?: string;
-  isManuallyAdded?: boolean;
-}
-
-interface DropdownOption {
-  id: number;
-  text: string;
-}
-
-interface InvoiceForm {
-  invoiceType: DropdownOption | null;
-  tradeDiscount: DropdownOption | null;
-  invNo: string;
-  invDate: string;
-  supplierInvoiceNo: string;
-  invRemark: string;
-  itemExpiry: string;
-  freight: string;
-  vatAmount: string;
-  discountAmount: string;
-}
-
-interface DraftRecord {
-  id: string;
-  poNumber: string;
-  poData: any;
-  invoiceForm: InvoiceForm;
-  items: ReceivedItem[];
-  savedAt: string;
-  submitted: boolean;
-  invoiceTypes: DropdownOption[];
-  tradeDiscounting: DropdownOption[];
-}
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const STATUS_CONFIG: Record<
+import {
   DeliveryStatus,
-  { label: string; color: string; icon: string }
-> = {
-  pending: { label: "Pending", color: "#F59E0B", icon: "time-outline" },
-  delivered: {
-    label: "Delivered",
-    color: "#10B981",
-    icon: "checkmark-circle-outline",
-  },
-  partial: { label: "Partial", color: "#3B82F6", icon: "git-branch-outline" },
-  missing: { label: "Missing", color: "#EF4444", icon: "close-circle-outline" },
-};
+  DraftRecord,
+  DropdownOption,
+  InvoiceForm,
+  ReceivedItem,
+} from "@/src/types";
+import { C, F, R, S, W } from "@/src/utils/theme";
 
 const generateId = () =>
   `draft_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
 const mapApiItems = (warehouseItems: any[]): ReceivedItem[] =>
-  (warehouseItems || []).map((item: any) => ({
-    recid: item.recid,
-    itemDesc: item.itemDesc,
-    itemCode: item.itemCode,
-    barcode: item.barcode,
-    poQty: Number(item.poQty) || 0,
-    qtyDelivered: Number(item.qtyDelivered) || 0,
-    receivedQty: 0,
-    cost: item.cost,
-    factor: item.factor,
-    uom: item.uom,
-    status: "pending" as DeliveryStatus,
-    remark: "",
-  }));
+  (warehouseItems || []).map((item: any) => {
+    const inv =
+      !Array.isArray(item.invoiceRecord) && item.invoiceRecord
+        ? item.invoiceRecord
+        : null;
+
+    const prevQty = inv ? Number(inv.receiptQty) || 0 : 0;
+    const noPoQty = inv ? Number(inv.noPoQty) || 0 : 0;
+    const poQty = Number(item.poQty) || 0;
+
+    const receivedQty = Math.min(prevQty, poQty);
+    const nonPoQty = noPoQty > 0 ? noPoQty : Math.max(0, prevQty - poQty);
+
+    let status: DeliveryStatus = "pending";
+    if (receivedQty >= poQty && receivedQty > 0) status = "delivered";
+    else if (receivedQty > 0) status = "partial";
+
+    return {
+      recid: item.recid,
+      itemDesc: item.itemDesc,
+      itemCode: item.itemCode,
+      barcode: item.barcode,
+      poQty,
+      qtyDelivered: Number(item.qtyDelivered) || 0,
+      receivedQty,
+      nonPoQty,
+      cost: item.cost,
+      factor: item.factor,
+      uom: item.uom,
+      status,
+      remark: "",
+    };
+  });
+
+function computeTotals(items: ReceivedItem[], invoiceForm: InvoiceForm) {
+  const subtotal = items.reduce((sum, item) => {
+    const poAmt = item.receivedQty * Number(item.cost || 0);
+    const nonPoAmt = (item.nonPoQty ?? 0) * Number(item.cost || 0);
+    return sum + poAmt + nonPoAmt;
+  }, 0);
+
+  const freight = parseFloat(invoiceForm.freight) || 0;
+  const vatAmount = parseFloat(invoiceForm.vatAmount) || 0;
+
+  let discountedTotal = subtotal;
+  let tradeDiscountAmt = 0;
+  let tradeDiscountRates: number[] = [];
+
+  if (invoiceForm.applyTradeDiscount && invoiceForm.tradeDiscount?.text) {
+    // Extract numbers from "LESS 10 10"
+    tradeDiscountRates =
+      invoiceForm.tradeDiscount.text.match(/\d+/g)?.map(Number) || [];
+
+    // Apply sequential discounts
+    tradeDiscountRates.forEach((rate) => {
+      const discount = discountedTotal * (rate / 100);
+      tradeDiscountAmt += discount;
+      discountedTotal -= discount;
+    });
+  }
+
+  const total = discountedTotal - freight + vatAmount;
+
+  return { subtotal, tradeDiscountAmt, tradeDiscountRates, total };
+}
 
 function buildInvoiceForm(record: any): InvoiceForm {
   const inv = record?.supplierInvoice || {};
+  const tradeDiscount = record?.tradeDiscount || null;
+
   return {
     invoiceType: inv.invoiceType || null,
-    tradeDiscount: record?.tradeDiscount || null,
+    tradeDiscount,
+    applyTradeDiscount: !!tradeDiscount,
     invNo: String(inv.invNo || ""),
     invDate: inv.invDate || "",
     supplierInvoiceNo: String(inv.supplierInvoiceNo || ""),
@@ -122,8 +119,7 @@ function buildInvoiceForm(record: any): InvoiceForm {
   };
 }
 
-// ─── StatusBadge ──────────────────────────────────────────────────────────────
-
+// ─── StatusBadge
 function StatusBadge({ status }: { status: DeliveryStatus }) {
   const cfg = STATUS_CONFIG[status];
   return (
@@ -150,8 +146,7 @@ const bdg = StyleSheet.create({
   txt: { fontSize: 10, fontWeight: "700" },
 });
 
-// ─── Dropdown ─────────────────────────────────────────────────────────────────
-
+// ─── Dropdown
 function Dropdown({
   label,
   value,
@@ -329,114 +324,128 @@ const fi = StyleSheet.create({
   },
 });
 
-// ─── ItemRow ──────────────────────────────────────────────────────────────────
-
+// ─── ItemRow
 function ItemRow({
   item,
   onUpdate,
   onRemove,
+  onAddExcessItem,
 }: {
   item: ReceivedItem;
   onUpdate: (u: ReceivedItem) => void;
   onRemove: () => void;
+  onAddExcessItem?: (baseItem: ReceivedItem, excessQty: number) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
 
   const setQty = (val: string) => {
     const qty = Math.max(0, parseInt(val) || 0);
-    let status: DeliveryStatus = "pending";
-    if (qty >= item.poQty && qty > 0) status = "delivered";
-    else if (qty > 0) status = "partial";
-    onUpdate({ ...item, receivedQty: qty, status });
+    if (qty <= item.poQty) {
+      let status: DeliveryStatus = "pending";
+      if (qty === item.poQty && qty > 0) status = "delivered";
+      else if (qty > 0) status = "partial";
+      onUpdate({ ...item, receivedQty: qty, status });
+    } else {
+      const excess = qty - item.poQty;
+      onUpdate({ ...item, receivedQty: item.poQty, status: "delivered" });
+      onAddExcessItem?.(item, excess);
+    }
+  };
+
+  const setNonPoQty = (val: string) => {
+    const qty = Math.max(0, parseInt(val) || 0);
+    onUpdate({ ...item, nonPoQty: qty });
   };
 
   const setStatus = (status: DeliveryStatus) =>
     onUpdate({
       ...item,
       status,
-      receivedQty:
-        status === "delivered"
-          ? item.poQty
-          : status === "missing"
-            ? 0
-            : item.receivedQty,
+      receivedQty: status === "delivered" ? item.poQty : item.receivedQty,
     });
 
   return (
     <View style={ir.wrap}>
-      <TouchableOpacity
-        style={ir.topRow}
-        onPress={() => setExpanded((e) => !e)}
-        activeOpacity={0.7}>
+      {/* ── Main row ── */}
+      <View style={ir.mainRow}>
+        {/* Left: item info */}
         <View style={ir.leftCol}>
-          <Text style={ir.desc} numberOfLines={expanded ? undefined : 2}>
+          <Text style={ir.desc} numberOfLines={2}>
             {item.itemDesc}
           </Text>
-          {item.barcode ? <Text style={ir.code}>{item.barcode}</Text> : null}
+          <View style={ir.meta}>
+            <Text style={ir.metaTxt}>PO: {item.poQty}</Text>
+            <Text style={ir.metaDot}>·</Text>
+            <Text style={ir.metaTxt}>
+              {item.uom}/{item.factor}
+            </Text>
+            <Text style={ir.metaDot}>·</Text>
+            <Text style={ir.metaTxt}>₱{Number(item.cost).toFixed(2)}</Text>
+          </View>
+          {item.barcode ? <Text style={ir.barcode}>{item.barcode}</Text> : null}
         </View>
+
+        {/* Right: status + stepper */}
         <View style={ir.rightCol}>
           <StatusBadge status={item.status} />
-          <Ionicons
-            name={expanded ? "chevron-up" : "chevron-down"}
-            size={14}
-            color={C.textTertiary}
-          />
+          <View style={ir.stepper}>
+            <TouchableOpacity
+              style={ir.stepBtn}
+              onPress={() => setQty(String(Math.max(0, item.receivedQty - 1)))}>
+              <Ionicons name="remove" size={15} color={C.textPrimary} />
+            </TouchableOpacity>
+            <TextInput
+              style={ir.stepInput}
+              value={String(item.receivedQty)}
+              onChangeText={setQty}
+              keyboardType="number-pad"
+              selectTextOnFocus
+            />
+            <TouchableOpacity
+              style={ir.stepBtn}
+              onPress={() => setQty(String(item.receivedQty + 1))}>
+              <Ionicons name="add" size={15} color={C.textPrimary} />
+            </TouchableOpacity>
+          </View>
         </View>
-      </TouchableOpacity>
-
-      <View style={ir.summaryBar}>
-        <Text style={ir.sTxt}>
-          PO: <Text style={ir.sVal}>{item.poQty}</Text>
-        </Text>
-        <Text style={ir.sTxt}>
-          Expected: <Text style={ir.sVal}>{item.poQty}</Text>
-        </Text>
-        <Text style={ir.sTxt}>
-          Received:{" "}
-          <Text style={[ir.sVal, { color: C.primary }]}>
-            {item.receivedQty}
-          </Text>
-        </Text>
-        <Text style={ir.sTxt}>
-          Factor:{" "}
-          <Text style={ir.sVal}>
-            {item.uom}/{item.factor}
-          </Text>
-        </Text>
-        <Text style={ir.sTxt}>
-          Cost: <Text style={ir.sVal}>{Number(item.cost).toFixed(2)}</Text>
-        </Text>
       </View>
 
-      {expanded && (
-        <View style={ir.controls}>
-          {/* Qty stepper */}
-          <View style={ir.qtyRow}>
-            <Text style={ir.ctrlLabel}>Received Qty</Text>
-            <View style={ir.qtyWrap}>
-              <TouchableOpacity
-                style={ir.qtyBtn}
-                onPress={() =>
-                  setQty(String(Math.max(0, item.receivedQty - 1)))
-                }>
-                <Ionicons name="remove" size={16} color={C.textPrimary} />
-              </TouchableOpacity>
-              <TextInput
-                style={ir.qtyInput}
-                value={String(item.receivedQty)}
-                onChangeText={setQty}
-                keyboardType="number-pad"
-                selectTextOnFocus
-              />
-              <TouchableOpacity
-                style={ir.qtyBtn}
-                onPress={() => setQty(String(item.receivedQty + 1))}>
-                <Ionicons name="add" size={16} color={C.textPrimary} />
-              </TouchableOpacity>
-            </View>
-          </View>
+      {/* ── Non-PO row (always visible) ── */}
+      <View style={ir.nonPoRow}>
+        <Text style={ir.nonPoLabel}>Non-PO</Text>
+        <View style={ir.nonPoStepper}>
+          <TouchableOpacity
+            style={ir.nonPoBtn}
+            onPress={() =>
+              setNonPoQty(String(Math.max(0, (item.nonPoQty ?? 0) - 1)))
+            }>
+            <Ionicons name="remove" size={13} color={C.textSecondary} />
+          </TouchableOpacity>
+          <Text
+            style={[
+              ir.nonPoVal,
+              (item.nonPoQty ?? 0) > 0 && { color: C.warning },
+            ]}>
+            {item.nonPoQty ?? 0}
+          </Text>
+          <TouchableOpacity
+            style={ir.nonPoBtn}
+            onPress={() => setNonPoQty(String((item.nonPoQty ?? 0) + 1))}>
+            <Ionicons name="add" size={13} color={C.textSecondary} />
+          </TouchableOpacity>
+        </View>
+        <Text style={ir.nonPoHint}>not included in total</Text>
+        <TouchableOpacity
+          style={ir.moreBtn}
+          onPress={() => setExpanded((e) => !e)}
+          hitSlop={10}>
+          <Text style={ir.moreTxt}>{expanded ? "less ‹" : "more ›"}</Text>
+        </TouchableOpacity>
+      </View>
 
-          {/* Status buttons */}
+      {/* ── Expanded: status buttons + remark + remove ── */}
+      {expanded && (
+        <View style={ir.expandedPanel}>
           <Text style={ir.ctrlLabel}>Mark As</Text>
           <View style={ir.statusRow}>
             {(Object.keys(STATUS_CONFIG) as DeliveryStatus[]).map((s) => {
@@ -464,7 +473,6 @@ function ItemRow({
             })}
           </View>
 
-          {/* Remark */}
           <TextInput
             style={ir.remark}
             placeholder="Remark (optional)..."
@@ -485,6 +493,7 @@ function ItemRow({
     </View>
   );
 }
+
 const ir = StyleSheet.create({
   wrap: {
     borderWidth: 1,
@@ -493,30 +502,109 @@ const ir = StyleSheet.create({
     marginBottom: S.sm,
     overflow: "hidden",
   },
-  topRow: {
+  // Main row
+  mainRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    gap: S.sm,
     padding: S.md,
     backgroundColor: C.bgElevated,
   },
-  leftCol: { flex: 1, marginRight: S.sm },
-  rightCol: { flexDirection: "row", alignItems: "center", gap: S.sm },
-  desc: { fontSize: F.sm, fontWeight: W.medium, color: C.textPrimary },
-  code: { fontSize: F.xs, color: C.textTertiary, marginTop: 2 },
-  summaryBar: {
+  leftCol: { flex: 1, minWidth: 0 },
+  rightCol: {
+    alignItems: "flex-end",
+    gap: 5,
+  },
+  desc: {
+    fontSize: F.sm,
+    fontWeight: W.medium,
+    color: C.textPrimary,
+  },
+  meta: {
     flexDirection: "row",
-    gap: S.md,
+    alignItems: "center",
+    gap: 4,
+    marginTop: 3,
+  },
+  barcode: {
+    fontSize: F.xs,
+    color: C.textTertiary,
+    marginTop: 2,
+    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
+  },
+  metaTxt: { fontSize: F.xs, color: C.textTertiary },
+  metaDot: { fontSize: F.xs, color: C.textTertiary },
+  // Received qty stepper
+  stepper: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: R.sm,
+    overflow: "hidden",
+    height: 30,
+  },
+  stepBtn: {
+    width: 30,
+    height: 30,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: C.bgElevated,
+  },
+  stepInput: {
+    width: 38,
+    textAlign: "center",
+    fontSize: F.sm,
+    color: C.textPrimary,
+  },
+  // Non-PO row
+  nonPoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: S.sm,
     paddingHorizontal: S.md,
-    paddingVertical: S.sm,
-    backgroundColor: C.bg,
+    paddingVertical: 7,
     borderTopWidth: 1,
     borderTopColor: C.border,
-    flexWrap: "wrap",
+    backgroundColor: C.bg,
   },
-  sTxt: { fontSize: F.xs, color: C.textTertiary },
-  sVal: { fontWeight: W.bold, color: C.textPrimary },
-  controls: {
+  nonPoLabel: {
+    fontSize: F.xs,
+    color: C.textTertiary,
+    width: 44,
+  },
+  nonPoStepper: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: R.sm,
+    overflow: "hidden",
+    height: 26,
+  },
+  nonPoBtn: {
+    width: 26,
+    height: 26,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: C.bgElevated,
+  },
+  nonPoVal: {
+    width: 30,
+    textAlign: "center",
+    fontSize: F.xs,
+    fontWeight: W.bold,
+    color: C.textPrimary,
+  },
+  nonPoHint: {
+    fontSize: 10,
+    color: C.textTertiary,
+    flex: 1,
+  },
+  moreBtn: { paddingVertical: 2 },
+  moreTxt: { fontSize: F.xs, color: C.textTertiary },
+  // Expanded panel
+  expandedPanel: {
     padding: S.md,
     borderTopWidth: 1,
     borderTopColor: C.border,
@@ -528,32 +616,6 @@ const ir = StyleSheet.create({
     color: C.textSecondary,
     textTransform: "uppercase",
     letterSpacing: 0.5,
-  },
-  qtyRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  qtyWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: C.border,
-    borderRadius: R.sm,
-    overflow: "hidden",
-  },
-  qtyBtn: {
-    paddingHorizontal: S.md,
-    paddingVertical: S.sm,
-    backgroundColor: C.bgElevated,
-  },
-  qtyInput: {
-    width: 52,
-    textAlign: "center",
-    fontSize: F.md,
-    fontWeight: W.bold,
-    color: C.textPrimary,
-    paddingVertical: S.sm,
   },
   statusRow: { flexDirection: "row", flexWrap: "wrap", gap: S.sm },
   statusBtn: {
@@ -585,8 +647,7 @@ const ir = StyleSheet.create({
   },
   removeTxt: { fontSize: F.xs, color: C.error, fontWeight: W.medium },
 });
-
-// ─── Add Item Modal ───────────────────────────────────────────────────────────
+// ─── Add Item Modal
 
 function AddItemModal({
   visible,
@@ -799,6 +860,9 @@ function DraftsModal({
                     </View>
                     <Text style={dm.meta}>
                       {item.items.length} items · {item.savedAt}
+                      {item.totalAmount !== undefined
+                        ? ` · ₱${item.totalAmount.toFixed(2)}`
+                        : ""}
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
@@ -868,12 +932,166 @@ const dm = StyleSheet.create({
   meta: { fontSize: F.xs, color: C.textTertiary, marginTop: 2 },
 });
 
-async function scanBarcode(): Promise<string | null> {
-  return null;
+function TotalsCard({
+  items,
+  invoiceForm,
+  onToggleDiscount,
+}: {
+  items: ReceivedItem[];
+  invoiceForm: InvoiceForm;
+  onToggleDiscount: () => void;
+}) {
+  const { subtotal, tradeDiscountAmt, tradeDiscountRates, total } =
+    computeTotals(items, invoiceForm);
+
+  const hasTradeDiscount =
+    invoiceForm.tradeDiscount && Number(invoiceForm.tradeDiscount.id) > 0;
+
+  return (
+    <Card style={tc.wrap}>
+      <View style={tc.header}>
+        <Text style={tc.title}>Receipt Summary</Text>
+        {hasTradeDiscount && (
+          <TouchableOpacity
+            style={[
+              tc.discountToggle,
+              invoiceForm.applyTradeDiscount && tc.discountToggleActive,
+            ]}
+            onPress={onToggleDiscount}
+            activeOpacity={0.7}>
+            <View
+              style={[
+                tc.checkbox,
+                invoiceForm.applyTradeDiscount && tc.checkboxActive,
+              ]}>
+              {invoiceForm.applyTradeDiscount && (
+                <Ionicons name="checkmark" size={11} color="#fff" />
+              )}
+            </View>
+            <Text
+              style={[
+                tc.discountToggleTxt,
+                invoiceForm.applyTradeDiscount && { color: C.primary },
+              ]}>
+              Apply Trade Discount ({invoiceForm.tradeDiscount?.text})
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      <View style={tc.rows}>
+        <View style={tc.row}>
+          <Text style={tc.rowLabel}>Subtotal</Text>
+          <Text style={tc.rowVal}>{subtotal.toFixed(2)}</Text>
+        </View>
+        {invoiceForm.applyTradeDiscount && tradeDiscountAmt > 0 && (
+          <View style={tc.row}>
+            <Text style={[tc.rowLabel, { color: C.error }]}>
+              Trade Discount
+            </Text>
+            <Text style={[tc.rowVal, { color: C.error }]}>
+              -{tradeDiscountAmt.toFixed(2)}
+            </Text>
+          </View>
+        )}
+        {parseFloat(invoiceForm.freight) > 0 && (
+          <View style={tc.row}>
+            <Text style={tc.rowLabel}>Freight</Text>
+            <Text style={tc.rowVal}>
+              +{parseFloat(invoiceForm.freight).toFixed(2)}
+            </Text>
+          </View>
+        )}
+        {parseFloat(invoiceForm.vatAmount) > 0 && (
+          <View style={tc.row}>
+            <Text style={tc.rowLabel}>VAT</Text>
+            <Text style={tc.rowVal}>
+              +{parseFloat(invoiceForm.vatAmount).toFixed(2)}
+            </Text>
+          </View>
+        )}
+        <View style={tc.divider} />
+        <View style={tc.row}>
+          <Text style={tc.totalLabel}>Total Amount</Text>
+          <Text style={tc.totalVal}>{total.toFixed(2)}</Text>
+        </View>
+      </View>
+    </Card>
+  );
 }
 
-// ─── Main Screen ──────────────────────────────
+const tc = StyleSheet.create({
+  wrap: { marginBottom: 0 },
+  header: { marginBottom: S.md },
+  title: {
+    fontSize: F.md,
+    fontWeight: W.bold,
+    color: C.textPrimary,
+    marginBottom: S.sm,
+  },
+  discountToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: S.sm,
+    paddingVertical: S.sm,
+    paddingHorizontal: S.md,
+    borderRadius: R.md,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: C.bgElevated,
+  },
+  discountToggleActive: {
+    borderColor: C.primary + "66",
+    backgroundColor: C.primary + "11",
+  },
+  checkbox: {
+    width: 18,
+    height: 18,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: C.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  checkboxActive: {
+    backgroundColor: C.primary,
+    borderColor: C.primary,
+  },
+  discountToggleTxt: {
+    fontSize: F.sm,
+    color: C.textSecondary,
+    fontWeight: W.medium,
+  },
+  rows: { gap: S.sm },
+  row: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  rowLabel: { fontSize: F.sm, color: C.textSecondary },
+  rowVal: {
+    fontSize: F.sm,
+    color: C.textPrimary,
+    fontWeight: W.medium,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: C.border,
+    marginVertical: S.xs ?? 4,
+  },
+  totalLabel: {
+    fontSize: F.md,
+    fontWeight: W.bold,
+    color: C.textPrimary,
+  },
+  totalVal: {
+    fontSize: F.lg,
+    fontWeight: W.bold,
+    color: C.primary,
+  },
+});
 
+// ─── Main Screen ──────────────────────────────
 export default function ReceiveStockScreen() {
   const { isOnline } = useNetwork();
 
@@ -892,6 +1110,7 @@ export default function ReceiveStockScreen() {
   const [invoiceForm, setInvoiceForm] = useState<InvoiceForm>({
     invoiceType: null,
     tradeDiscount: null,
+    applyTradeDiscount: false,
     invNo: "",
     invDate: "",
     supplierInvoiceNo: "",
@@ -909,6 +1128,8 @@ export default function ReceiveStockScreen() {
   const [drafts, setDrafts] = useState<DraftRecord[]>([]);
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
 
+  const [scanner, setScanner] = useState(false);
+
   // ── Fetch PO ──────────────────────────────────────────────────────────────
 
   const fetchPO = async () => {
@@ -924,14 +1145,17 @@ export default function ReceiveStockScreen() {
     setErrors("");
     try {
       const res = await api.getPOByNumber(poNumber);
-      // res shape: { status, record, invoiceTypes, tradeDiscounting }
       const record = res.record;
-      setPoData(record);
-      setInvoiceTypes(res.invoiceTypes || []);
-      setTradeDiscounting(res.tradeDiscounting || []);
-      setItems(mapApiItems(record?.supplierInvoice?.warehouseItems || []));
-      setInvoiceForm(buildInvoiceForm(record));
-      setActiveDraftId(null);
+      if (record) {
+        setPoData(record);
+        setInvoiceTypes(res.invoiceTypes || []);
+        setTradeDiscounting(res.tradeDiscounting || []);
+        setItems(mapApiItems(record?.supplierInvoice?.warehouseItems || []));
+        setInvoiceForm(buildInvoiceForm(record));
+        setActiveDraftId(null);
+      } else {
+        setErrors("PO # not found!");
+      }
     } catch (err: any) {
       setErrors(err?.message || "Failed to fetch PO");
       setPoData(null);
@@ -941,40 +1165,10 @@ export default function ReceiveStockScreen() {
     }
   };
 
-  // ── Barcode scan ──────────────────────────────────────────────────────────
+  // ── Barcode scan
 
-  const handleScan = async () => {
-    const code = await scanBarcode();
-    if (!code) return;
-    const matchIdx = items.findIndex(
-      (i) => i.barcode === code || i.itemCode === code,
-    );
-    if (matchIdx !== -1) {
-      setItems((prev) =>
-        prev.map((item, idx) => {
-          if (idx !== matchIdx) return item;
-          const newQty = item.receivedQty + 1;
-          return {
-            ...item,
-            receivedQty: newQty,
-            status: newQty >= item.poQty ? "delivered" : "partial",
-          };
-        }),
-      );
-      Alert.alert("✓ Scanned", `Matched: ${items[matchIdx].itemDesc}`);
-    } else {
-      Alert.alert(
-        "Unknown Barcode",
-        `"${code}" not found in PO items.\nAdd as a new item?`,
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "Add Item", onPress: () => setShowAddItem(true) },
-        ],
-      );
-    }
-  };
-
-  // ── Item ops ──────────────────────────────────────────────────────────────
+  const handleScan = () => setScanner(true);
+  // ── Item ops
 
   const updateItem = (i: number, updated: ReceivedItem) =>
     setItems((prev) => prev.map((item, idx) => (idx === i ? updated : item)));
@@ -987,6 +1181,26 @@ export default function ReceiveStockScreen() {
   const setInv = (key: keyof InvoiceForm, val: any) =>
     setInvoiceForm((prev) => ({ ...prev, [key]: val }));
 
+  const toggleTradeDiscount = () => {
+    if (!invoiceForm.tradeDiscount) return;
+
+    setInvoiceForm((prev) => ({
+      ...prev,
+      applyTradeDiscount: !prev.applyTradeDiscount,
+    }));
+  };
+
+  // --- handle excesss item
+  const handleExcessItem = (baseItem: ReceivedItem, excessQty: number) => {
+    setItems((prev) =>
+      prev.map((item) =>
+        item.recid === baseItem.recid
+          ? { ...item, nonPoQty: (item.nonPoQty ?? 0) + excessQty }
+          : item,
+      ),
+    );
+  };
+
   // ── Save draft ────────────────────────────────────────────────────────────
 
   const saveDraft = () => {
@@ -995,8 +1209,10 @@ export default function ReceiveStockScreen() {
       return;
     }
     const draftId = activeDraftId || generateId();
+    const { total } = computeTotals(items, invoiceForm);
     const draft: DraftRecord = {
       id: draftId,
+      totalAmount: total,
       poNumber,
       poData,
       invoiceForm,
@@ -1090,6 +1306,7 @@ export default function ReceiveStockScreen() {
           itemDesc: item.itemDesc,
           itemCode: item.itemCode,
           receivedQty: item.receivedQty,
+          nonPoQty: item.nonPoQty ?? 0,
           status: item.status,
           remark: item.remark,
           isManuallyAdded: item.isManuallyAdded || false,
@@ -1143,7 +1360,6 @@ export default function ReceiveStockScreen() {
   const stats = {
     delivered: items.filter((i) => i.status === "delivered").length,
     partial: items.filter((i) => i.status === "partial").length,
-    missing: items.filter((i) => i.status === "missing").length,
     pending: items.filter((i) => i.status === "pending").length,
   };
 
@@ -1229,16 +1445,13 @@ export default function ReceiveStockScreen() {
           {/* ── PO Details ── */}
           {poData && (
             <Card style={s.card}>
-              <SectionHeader title="PO Details" />
+              <SectionHeader title={poData.supplierName} />
               <View style={s.detailGrid}>
                 {(
                   [
-                    ["PO Reference", poData.poRefNo],
-                    ["PO Number", String(poData.poNo)],
-                    ["Receipt Ref", poData.receiptRefNo],
                     ["PO Date", poData.poDate],
-                    ["Supplier Code", String(poData.supplierCode)],
-                    ["Supplier", poData.supplierName],
+                    ["PO Reference", poData.poRefNo],
+                    ["Receipt Ref", poData.receiptRefNo],
                   ] as [string, string][]
                 ).map(([label, val]) => (
                   <View key={label} style={s.detailCell}>
@@ -1272,27 +1485,15 @@ export default function ReceiveStockScreen() {
                   label="Trade Discount"
                   value={invoiceForm.tradeDiscount}
                   options={tradeDiscounting}
-                  onSelect={(v) => setInv("tradeDiscount", v)}
+                  onSelect={(v) =>
+                    setInvoiceForm((prev) => ({
+                      ...prev,
+                      tradeDiscount: v,
+                      applyTradeDiscount: !!v,
+                    }))
+                  }
                   placeholder="Select trade discount..."
                 />
-                <View style={s.formRow}>
-                  <View style={{ flex: 1 }}>
-                    <FieldInput
-                      label="Inv No"
-                      value={invoiceForm.invNo}
-                      onChange={(v) => setInv("invNo", v)}
-                      keyboardType="number-pad"
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <FieldInput
-                      label="Supplier Inv No"
-                      value={invoiceForm.supplierInvoiceNo}
-                      onChange={(v) => setInv("supplierInvoiceNo", v)}
-                      keyboardType="number-pad"
-                    />
-                  </View>
-                </View>
                 <View style={s.formRow}>
                   <View style={{ flex: 1 }}>
                     <FieldInput
@@ -1302,6 +1503,16 @@ export default function ReceiveStockScreen() {
                       placeholder="MM/DD/YYYY"
                     />
                   </View>
+                  <View style={{ flex: 1 }}>
+                    <FieldInput
+                      label="Inv No"
+                      value={invoiceForm.invNo}
+                      onChange={(v) => setInv("invNo", v)}
+                      keyboardType="number-pad"
+                    />
+                  </View>
+                </View>
+                <View style={s.formRow}>
                   <View style={{ flex: 1 }}>
                     <FieldInput
                       label="Item Expiry"
@@ -1386,11 +1597,6 @@ export default function ReceiveStockScreen() {
                       color: "#3B82F6",
                     },
                     {
-                      label: "Missing",
-                      count: stats.missing,
-                      color: "#EF4444",
-                    },
-                    {
                       label: "Pending",
                       count: stats.pending,
                       color: "#F59E0B",
@@ -1430,10 +1636,20 @@ export default function ReceiveStockScreen() {
                     item={item}
                     onUpdate={(u) => updateItem(idx, u)}
                     onRemove={() => removeItem(idx)}
+                    onAddExcessItem={handleExcessItem}
                   />
                 ))
               )}
             </Card>
+          )}
+
+          {/* ── Totals ── */}
+          {poData && items.length > 0 && (
+            <TotalsCard
+              items={items}
+              invoiceForm={invoiceForm}
+              onToggleDiscount={toggleTradeDiscount}
+            />
           )}
 
           {/* ── Actions ── */}
@@ -1459,7 +1675,7 @@ export default function ReceiveStockScreen() {
                         size={16}
                         color="#fff"
                       />
-                      <Text style={s.submitTxt}>Submit to Server</Text>
+                      <Text style={s.submitTxt}>Submit</Text>
                     </>
                   )}
                 </TouchableOpacity>
@@ -1483,6 +1699,50 @@ export default function ReceiveStockScreen() {
         onClose={() => setShowDrafts(false)}
         onLoad={loadDraft}
         onDelete={deleteDraft}
+      />
+
+      <BarcodeScannerModal
+        visible={scanner}
+        onClose={() => setScanner(false)}
+        onScanned={(code) => {
+          setScanner(false);
+          const matchIdx = items.findIndex(
+            (i) => i.barcode === code || i.itemCode === code,
+          );
+          if (matchIdx !== -1) {
+            setItems((prev) =>
+              prev.map((item, idx) => {
+                if (idx !== matchIdx) return item;
+                const newQty = item.receivedQty + 1;
+                if (newQty <= item.poQty) {
+                  return {
+                    ...item,
+                    receivedQty: newQty,
+                    status: newQty === item.poQty ? "delivered" : "partial",
+                  };
+                } else {
+                  return {
+                    ...item,
+                    receivedQty: item.poQty,
+                    status: "delivered",
+                    nonPoQty: (item.nonPoQty ?? 0) + 1,
+                  };
+                }
+              }),
+            );
+            Alert.alert("✓ Scanned", `Matched: ${items[matchIdx].itemDesc}`);
+          } else {
+            Alert.alert(
+              "Item not found!",
+              `"${code}" not found in PO items.\nAdd as a new item?`,
+              [
+                { text: "Cancel", style: "cancel" },
+                { text: "Add Item", onPress: () => setShowAddItem(true) },
+              ],
+            );
+          }
+        }}
+        title="Scan Barcode"
       />
     </SafeAreaView>
   );
@@ -1543,7 +1803,7 @@ const s = StyleSheet.create({
   fetchBtnTxt: { color: "#fff", fontWeight: W.bold },
   // PO details
   detailGrid: { flexDirection: "row", flexWrap: "wrap", gap: S.sm },
-  detailCell: { minWidth: "45%", flex: 1 },
+  detailCell: { minWidth: "30%", flex: 1 },
   detailFull: { width: "100%" },
   detailLabel: {
     fontSize: F.xs,

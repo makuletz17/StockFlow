@@ -30,7 +30,7 @@ class ApiService {
 
   constructor() {
     this.http = axios.create({
-      baseURL: "", // set properly in init()
+      baseURL: "",
       timeout: 12_000,
       headers: {
         "Content-Type": "application/json",
@@ -40,16 +40,7 @@ class ApiService {
 
     // Attach token on every request
     this.http.interceptors.request.use(async (cfg) => {
-      const fullUrl = `${cfg.baseURL || ""}${cfg.url}`;
-
-      console.log("➡️ Request:");
-      console.log("URL:", fullUrl);
-      console.log("Method:", cfg.method);
-      console.log("Headers:", { ...cfg.headers });
-      console.log("Body:", cfg.data);
-
       const token = await storage.get(KEY_TOKEN);
-      console.log("Interceptor Token:", token);
       if (token) {
         cfg.headers.set("x-token", token);
       }
@@ -58,11 +49,6 @@ class ApiService {
 
     this.http.interceptors.response.use(
       async (res) => {
-        console.log("⬅️ Response:");
-        console.log("URL:", res.config.url);
-        console.log("Status:", res.status);
-        console.log("Data:", res.data);
-
         const newToken = res.data?.token || res.data?.data?.token;
         if (newToken && typeof newToken === "string") {
           await storage.set(KEY_TOKEN, newToken);
@@ -71,11 +57,6 @@ class ApiService {
         return res;
       },
       async (err) => {
-        console.log("❌ Error Response:");
-        console.log("URL:", err?.config?.url);
-        console.log("Status:", err?.response?.status);
-        console.log("Message:", err?.response?.data);
-
         const status = err?.response?.status;
         const message = err?.response?.data?.message;
 
@@ -89,11 +70,6 @@ class ApiService {
   }
 
   // ── URL resolution ─────────────────────────────────────────
-
-  /**
-   * Called once on app boot.
-   * Returns the resolved URL (may be empty string if nothing configured).
-   */
   async init(): Promise<string> {
     const saved = await storage.get(KEY_URL); // user override first
     const envUrl = getEnvUrl(); // .env fallback
