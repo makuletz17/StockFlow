@@ -542,20 +542,24 @@ const ir = StyleSheet.create({
     borderColor: C.border,
     borderRadius: R.sm,
     overflow: "hidden",
-    height: 30,
+    height: 34,
   },
   stepBtn: {
-    width: 30,
+    width: 32,
     height: 30,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: C.bgElevated,
   },
   stepInput: {
-    width: 38,
+    width: 42,
+    height: 34,
     textAlign: "center",
     fontSize: F.sm,
     color: C.textPrimary,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    includeFontPadding: false,
   },
   // Non-PO row
   nonPoRow: {
