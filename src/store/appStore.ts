@@ -1,7 +1,5 @@
-// src/store/appStore.ts
-
 import { create } from "zustand";
-import { ApiSettings, OfflineRecord, Store, User } from "../types";
+import { ApiSettings, OfflineRecord, User } from "../types";
 import { storage } from "../utils/storage";
 
 const Q_KEY = "sf_offline_queue";
@@ -11,9 +9,6 @@ interface AppState {
   // ── Auth ─────────────────────────────────────────────────
   user: User | null;
   isAuthenticated: boolean;
-
-  // ── Store ────────────────────────────────────────────────
-  selectedStore: Store | null;
 
   // ── API config (from server ping) ────────────────────────
   apiSettings: ApiSettings | null;
@@ -26,7 +21,6 @@ interface AppState {
 
   // ── Actions ──────────────────────────────────────────────
   setUser: (u: User | null) => void;
-  setSelectedStore: (s: Store | null) => void;
   setApiSettings: (s: ApiSettings | null) => Promise<void>;
   setIsOnline: (v: boolean) => void;
   addOfflineRecord: (r: OfflineRecord) => Promise<void>;
@@ -40,7 +34,6 @@ interface AppState {
 export const useAppStore = create<AppState>((set, get) => ({
   user: null,
   isAuthenticated: false,
-  selectedStore: null,
   apiSettings: null,
   isOnline: true,
   offlineQueue: [],
@@ -50,14 +43,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   setUser: (user) => {
     set({ user, isAuthenticated: !!user });
     if (user) storage.set("sf_user", JSON.stringify(user));
-  },
-
-  // ── Store ────────────────────────────────────────────────
-
-  setSelectedStore: (store) => {
-    set({ selectedStore: store });
-    if (store) storage.set("sf_store", JSON.stringify(store));
-    else storage.remove("sf_store");
   },
 
   // ── API settings (persisted) ─────────────────────────────
@@ -105,15 +90,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   // ── Hydration ────────────────────────────────────────────
 
   loadState: async () => {
-    const [uStr, sStr, qStr, cfgStr] = await Promise.all([
+    const [uStr, qStr, cfgStr] = await Promise.all([
       storage.get("sf_user"),
-      storage.get("sf_store"),
       storage.get(Q_KEY),
       storage.get(API_CONFIG_KEY),
     ]);
     set({
       user: uStr ? (JSON.parse(uStr) as User) : null,
-      selectedStore: sStr ? (JSON.parse(sStr) as Store) : null,
       offlineQueue: qStr ? (JSON.parse(qStr) as OfflineRecord[]) : [],
       apiSettings: cfgStr ? (JSON.parse(cfgStr) as ApiSettings) : null,
       isAuthenticated: !!uStr,

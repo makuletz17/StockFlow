@@ -1,12 +1,8 @@
-// app/(app)/(tabs)/index.tsx  — Dashboard
-
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
-  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -16,53 +12,42 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import api from "@/src/api/apiService";
-import { Card, EmptyState, SectionHeader } from "@/src/components/UI";
 import { useNetwork } from "@/src/hooks/useNetwork";
 import { useOfflineSync } from "@/src/hooks/useOfflineSync";
 import { useAppStore } from "@/src/store/appStore";
-import { DashboardSummary } from "@/src/types";
-import { formatDateTime } from "@/src/utils/helpers";
+import { DRAFTS_KEY } from "@/src/utils/storage";
 import { C, F, R, S, W } from "@/src/utils/theme";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 type IconName = keyof typeof Ionicons.glyphMap;
+type MaterialIconName = keyof typeof MaterialCommunityIcons.glyphMap;
 
 export default function DashboardScreen() {
   const router = useRouter();
-  const { user, selectedStore, offlineQueue, clearAuth } = useAppStore();
+  const { user, offlineQueue, clearAuth } = useAppStore();
   const { isOnline } = useNetwork();
+  const [draftCount, setDraftCount] = useState(0);
   useOfflineSync();
-
-  const [summary, setSummary] = useState<DashboardSummary | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
 
   const pending = offlineQueue.filter((r) => !r.synced);
 
-  useEffect(() => {
-    loadDashboard();
-  }, [selectedStore]);
+  useFocusEffect(
+    useCallback(() => {
+      const loadDraftCount = async () => {
+        try {
+          const stored = await AsyncStorage.getItem(DRAFTS_KEY);
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            setDraftCount(parsed.length || 0);
+          }
+        } catch (e) {
+          console.log(e);
+        }
+      };
 
-  const loadDashboard = async () => {
-    if (!isOnline) {
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    try {
-      const data = await api.getDashboard(selectedStore?.id);
-      setSummary(data);
-    } catch {
-      /* silent */
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await loadDashboard();
-    setRefreshing(false);
-  }, [selectedStore, isOnline]);
+      loadDraftCount();
+    }, []),
+  );
 
   const handleLogout = () => {
     Alert.alert("Sign Out", "Are you sure you want to sign out?", [
@@ -85,31 +70,31 @@ export default function DashboardScreen() {
 
   const quickActions: {
     label: string;
-    icon: IconName;
+    icon: MaterialIconName;
     color: string;
     route: string;
   }[] = [
     {
       label: "Receive\nStock",
-      icon: "add-circle-outline",
+      icon: "package-variant",
       color: C.accent,
-      route: "/(app)/(tabs)/received",
+      route: "/(app)/(tabs)/receive",
     },
     {
       label: "Inventory\nList",
-      icon: "cube-outline",
+      icon: "clipboard-text",
       color: C.primary,
       route: "/(app)/(tabs)/inventory",
     },
     {
       label: "Received\nList",
-      icon: "receipt-outline",
+      icon: "package-variant-closed",
       color: C.accentPurple,
       route: "/(app)/(tabs)/received-list",
     },
     {
       label: "More\nOptions",
-      icon: "apps-outline",
+      icon: "dots-horizontal-circle-outline",
       color: C.accentOrange,
       route: "/(app)/(tabs)/more",
     },
@@ -124,23 +109,9 @@ export default function DashboardScreen() {
           <Text style={s.userName} numberOfLines={1}>
             {user?.name ?? user?.username ?? "User"}
           </Text>
-          {selectedStore ? (
-            <View style={s.storeChip}>
-              <Ionicons name="storefront-outline" size={12} color={C.primary} />
-              <Text style={s.storeChipText}>{selectedStore.name}</Text>
-            </View>
-          ) : null}
         </View>
 
         <View style={s.headerRight}>
-          {/* Online indicator */}
-          <View
-            style={[
-              s.onlineDot,
-              { backgroundColor: isOnline ? C.success : C.error },
-            ]}
-          />
-
           {/* Pending offline badge */}
           {pending.length > 0 && (
             <TouchableOpacity
@@ -164,15 +135,8 @@ export default function DashboardScreen() {
 
       <ScrollView
         contentContainerStyle={s.scroll}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={C.primary}
-          />
-        }>
-        {/* Offline banner */}
+        showsVerticalScrollIndicator={false}>
+        {/* ── Offline banner ────────────────────────────── */}
         {!isOnline && (
           <View style={s.offlineBanner}>
             <Ionicons
@@ -181,13 +145,13 @@ export default function DashboardScreen() {
               color={C.warning}
             />
             <Text style={s.offlineTxt}>
-              Offline Mode
+              {"Offline Mode"}
               {pending.length > 0 ? `  ·  ${pending.length} pending sync` : ""}
             </Text>
           </View>
         )}
 
-        {/* Pending sync banner */}
+        {/* ── Pending sync banner ───────────────────────── */}
         {isOnline && pending.length > 0 && (
           <TouchableOpacity
             style={s.syncBanner}
@@ -205,8 +169,21 @@ export default function DashboardScreen() {
           </TouchableOpacity>
         )}
 
+        {/* ── Welcome card ──────────────────────────────── */}
+        <View style={s.welcomeCard}>
+          <View style={s.welcomeIconBox}>
+            <Ionicons name="layers" size={32} color={C.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.welcomeTitle}>StockFlow</Text>
+            <Text style={s.welcomeSub}>
+              Inventory Receiving & Encoding System
+            </Text>
+          </View>
+        </View>
+
         {/* ── Quick Actions ──────────────────────────────── */}
-        <SectionHeader title="Quick Actions" style={{ marginBottom: S.md }} />
+        <Text style={s.sectionTitle}>Quick Actions</Text>
         <View style={s.quickGrid}>
           {quickActions.map((a) => (
             <TouchableOpacity
@@ -215,150 +192,100 @@ export default function DashboardScreen() {
               onPress={() => router.push(a.route as never)}
               activeOpacity={0.75}>
               <View style={[s.quickIcon, { backgroundColor: a.color + "18" }]}>
-                <Ionicons name={a.icon} size={26} color={a.color} />
+                <MaterialCommunityIcons
+                  name={a.icon}
+                  size={26}
+                  color={a.color}
+                />
               </View>
               <Text style={s.quickLabel}>{a.label}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        {/* ── Stats ─────────────────────────────────────── */}
-        <SectionHeader
-          title="Overview"
-          subtitle="Inventory snapshot"
-          style={{ marginTop: S.xl }}
-        />
-
-        {loading ? (
-          <ActivityIndicator
-            color={C.primary}
-            style={{ paddingVertical: S.xl }}
+        {/* ── Info rows ─────────────────────────────────── */}
+        <Text style={s.sectionTitle}>Status</Text>
+        <View style={s.infoCard}>
+          <InfoRow
+            icon="archive-outline"
+            label="Drafts"
+            value={
+              draftCount > 0
+                ? `${draftCount} draft${draftCount > 1 ? "s" : ""}`
+                : "No drafts"
+            }
+            valueColor={draftCount > 0 ? C.accentPurple : C.textTertiary}
           />
-        ) : summary ? (
-          <>
-            <View style={s.statsRow}>
-              <StatCard
-                label="Total Items"
-                value={summary.total_items}
-                icon="cube"
-                color={C.primary}
-              />
-              <StatCard
-                label="Low Stock"
-                value={summary.low_stock_count}
-                icon="warning"
-                color={C.accentRed}
-              />
-            </View>
-            <View style={[s.statsRow, { marginTop: S.sm }]}>
-              <StatCard
-                label="Received Today"
-                value={summary.received_today}
-                icon="download"
-                color={C.accent}
-              />
-              <StatCard
-                label="Pending"
-                value={summary.pending_stocks}
-                icon="time"
-                color={C.accentOrange}
-              />
-            </View>
-
-            {/* Recent activity */}
-            {summary.recent_activity?.length > 0 && (
-              <>
-                <SectionHeader
-                  title="Recent Activity"
-                  style={{ marginTop: S.xl }}
-                />
-                <Card>
-                  {summary.recent_activity.slice(0, 6).map((item, i) => (
-                    <View key={item.id}>
-                      <View style={s.actRow}>
-                        <View
-                          style={[
-                            s.actDot,
-                            {
-                              backgroundColor:
-                                item.type === "receive"
-                                  ? C.accent
-                                  : item.type === "inventory"
-                                    ? C.primary
-                                    : C.accentOrange,
-                            },
-                          ]}
-                        />
-                        <View style={{ flex: 1 }}>
-                          <Text style={s.actDesc}>{item.description}</Text>
-                          <Text style={s.actMeta}>
-                            {item.user} · {formatDateTime(item.timestamp)}
-                          </Text>
-                        </View>
-                      </View>
-                      {i < summary.recent_activity.length - 1 && (
-                        <View style={s.actDivider} />
-                      )}
-                    </View>
-                  ))}
-                </Card>
-              </>
-            )}
-          </>
-        ) : (
-          <Card>
-            <EmptyState
-              icon="bar-chart-outline"
-              title={
-                isOnline
-                  ? "Could not load summary"
-                  : "Connect to internet for stats"
-              }
-              subtitle={isOnline ? "Pull down to retry" : undefined}
-            />
-          </Card>
-        )}
+          <View style={s.divider} />
+          <InfoRow
+            icon="wifi-outline"
+            label="Connection"
+            value={isOnline ? "Online" : "Offline"}
+            valueColor={isOnline ? C.accent : C.error}
+          />
+          <View style={s.divider} />
+          <InfoRow
+            icon="cloud-upload-outline"
+            label="Pending sync"
+            value={
+              pending.length > 0
+                ? `${pending.length} record${pending.length > 1 ? "s" : ""}`
+                : "All synced"
+            }
+            valueColor={pending.length > 0 ? C.accentOrange : C.accent}
+          />
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-// ── Mini StatCard ────────────────────────────────────────────
-function StatCard(p: {
+// ── Info row helper ──────────────────────────────────────────
+function InfoRow({
+  icon,
+  label,
+  value,
+  valueColor,
+}: {
+  icon: IconName;
   label: string;
-  value: number;
-  icon: keyof typeof Ionicons.glyphMap;
-  color: string;
+  value: string;
+  valueColor: string;
 }) {
   return (
-    <View style={[st.card, { flex: 1 }]}>
-      <View style={[st.icon, { backgroundColor: p.color + "20" }]}>
-        <Ionicons name={p.icon} size={20} color={p.color} />
+    <View style={ir.row}>
+      <View style={ir.iconBox}>
+        <Ionicons name={icon} size={18} color={C.textTertiary} />
       </View>
-      <Text style={st.value}>{p.value}</Text>
-      <Text style={st.label}>{p.label}</Text>
+      <Text style={ir.label}>{label}</Text>
+      <Text style={[ir.value, { color: valueColor }]}>{value}</Text>
     </View>
   );
 }
-const st = StyleSheet.create({
-  card: {
-    backgroundColor: C.bgCard,
-    borderRadius: R.lg,
-    padding: S.lg,
-    borderWidth: 1,
-    borderColor: C.border,
-    marginHorizontal: S.xs / 2,
+
+const ir = StyleSheet.create({
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: S.md,
+    paddingHorizontal: S.lg,
+    gap: S.md,
   },
-  icon: {
-    width: 40,
-    height: 40,
-    borderRadius: R.md,
+  iconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: R.sm,
+    backgroundColor: C.bgElevated,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: S.sm,
   },
-  value: { fontSize: F.xxl, fontWeight: W.bold, color: C.textPrimary },
-  label: { fontSize: F.xs, color: C.textTertiary, marginTop: 2 },
+  label: {
+    flex: 1,
+    fontSize: F.sm,
+    color: C.textSecondary,
+    fontWeight: W.medium,
+  },
+  value: { fontSize: F.sm, fontWeight: W.semibold },
 });
 
 // ── Styles ───────────────────────────────────────────────────
@@ -375,18 +302,6 @@ const s = StyleSheet.create({
   },
   greeting: { fontSize: F.sm, color: C.textTertiary },
   userName: { fontSize: F.xl, fontWeight: W.bold, color: C.textPrimary },
-  storeChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: C.primary + "18",
-    paddingHorizontal: S.sm,
-    paddingVertical: 3,
-    borderRadius: R.full,
-    alignSelf: "flex-start",
-    marginTop: S.xs,
-  },
-  storeChipText: { fontSize: F.xs, color: C.primary, fontWeight: W.medium },
 
   headerRight: {
     flexDirection: "row",
@@ -394,7 +309,6 @@ const s = StyleSheet.create({
     gap: S.sm,
     paddingTop: 4,
   },
-  onlineDot: { width: 8, height: 8, borderRadius: 4 },
   pendingBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -440,11 +354,47 @@ const s = StyleSheet.create({
     fontWeight: W.medium,
   },
 
+  welcomeCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: S.lg,
+    backgroundColor: C.bgCard,
+    borderRadius: R.lg,
+    padding: S.lg,
+    borderWidth: 1,
+    borderColor: C.primary + "30",
+    marginBottom: S.xl,
+  },
+  welcomeIconBox: {
+    width: 56,
+    height: 56,
+    borderRadius: R.lg,
+    backgroundColor: C.primary + "18",
+    borderWidth: 1.5,
+    borderColor: C.primary + "35",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  welcomeTitle: { fontSize: F.xl, fontWeight: W.bold, color: C.textPrimary },
+  welcomeSub: {
+    fontSize: F.xs,
+    color: C.textTertiary,
+    marginTop: 3,
+    lineHeight: 16,
+  },
+
+  sectionTitle: {
+    fontSize: F.lg,
+    fontWeight: W.bold,
+    color: C.textPrimary,
+    marginBottom: S.md,
+  },
+
   quickGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: S.sm,
-    marginBottom: S.lg,
+    marginBottom: S.xl,
   },
   quickCard: {
     width: "47.5%",
@@ -469,16 +419,12 @@ const s = StyleSheet.create({
     lineHeight: 18,
   },
 
-  statsRow: { flexDirection: "row", gap: S.sm },
-
-  actRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: S.md,
-    paddingVertical: S.sm,
+  infoCard: {
+    backgroundColor: C.bgCard,
+    borderRadius: R.lg,
+    borderWidth: 1,
+    borderColor: C.border,
+    overflow: "hidden",
   },
-  actDot: { width: 8, height: 8, borderRadius: 4, marginTop: 6 },
-  actDesc: { fontSize: F.sm, color: C.textPrimary, fontWeight: W.medium },
-  actMeta: { fontSize: F.xs, color: C.textTertiary, marginTop: 2 },
-  actDivider: { height: 1, backgroundColor: C.border, marginLeft: 24 },
+  divider: { height: 1, backgroundColor: C.border },
 });

@@ -25,14 +25,8 @@ import { C, F, R, S, W } from "@/src/utils/theme";
 
 export default function MoreScreen() {
   const router = useRouter();
-  const {
-    user,
-    selectedStore,
-    clearAuth,
-    offlineQueue,
-    removeOfflineRecord,
-    markSynced,
-  } = useAppStore();
+  const { user, clearAuth, offlineQueue, removeOfflineRecord, markSynced } =
+    useAppStore();
   const { isOnline } = useNetwork();
   const { syncAll } = useOfflineSync();
 
@@ -91,14 +85,14 @@ export default function MoreScreen() {
     {
       icon: "server-outline" as const,
       label: "API Server",
-      sub: apiSettings?.config?.app_name ?? api.getBaseURL(),
+      sub: api.getBaseURL(),
       onPress: () => router.push("/configure"),
       color: C.accent,
     },
     {
       icon: "person-outline" as const,
       label: "Account",
-      sub: `${user?.name ?? user?.username}  ·  ${user?.role ?? "user"}`,
+      sub: `${user?.name ?? user?.username}`,
       onPress: () => {},
       color: C.accentPurple,
     },

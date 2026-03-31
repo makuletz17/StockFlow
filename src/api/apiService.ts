@@ -1,9 +1,9 @@
 import axios, { AxiosInstance, AxiosResponse } from "axios";
 import { encode as btoa } from "base-64";
 import Constants from "expo-constants";
+import { useAppStore } from "../store/appStore";
 import {
   ApiResponse,
-  DashboardSummary,
   InventoryItem,
   Item,
   ReceivedStock,
@@ -62,6 +62,7 @@ class ApiService {
 
         if (status === 401 || message === "please renew your access!") {
           await this.logout();
+          useAppStore.getState().clearAuth();
         }
 
         return Promise.reject(err);
@@ -168,7 +169,6 @@ class ApiService {
       storage.remove(KEY_TOKEN),
       storage.remove("sf_user"),
       storage.remove("sf_username"),
-      storage.remove("sf_store"),
     ]);
   }
 
@@ -277,14 +277,6 @@ class ApiService {
       store_id,
     });
     return res.data.data as { imported: number; errors: string[] };
-  }
-
-  // ── Dashboard ──────────────────────────────────────────────
-
-  async getDashboard(store_id?: number): Promise<DashboardSummary> {
-    const res: AxiosResponse<ApiResponse<DashboardSummary>> =
-      await this.http.get("/dashboard/summary", { params: { store_id } });
-    return res.data.data;
   }
 }
 

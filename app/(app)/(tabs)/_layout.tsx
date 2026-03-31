@@ -2,11 +2,11 @@
 
 import { useAppStore } from "@/src/store/appStore";
 import { C, F, W } from "@/src/utils/theme";
-import { Ionicons } from "@expo/vector-icons";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import { Platform, StyleSheet } from "react-native";
 
-type IconName = keyof typeof Ionicons.glyphMap;
+type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
 
 interface TabConfig {
   name: string;
@@ -19,32 +19,32 @@ const TABS: TabConfig[] = [
   {
     name: "index",
     title: "Dashboard",
-    icon: "grid-outline",
-    activeIcon: "grid",
+    icon: "view-dashboard-outline",
+    activeIcon: "view-dashboard",
   },
   {
     name: "received",
     title: "Receive",
-    icon: "add-circle-outline",
-    activeIcon: "add-circle",
+    icon: "package-variant-closed", // solid package
+    activeIcon: "package-variant",
   },
   {
     name: "received-list",
     title: "Received",
-    icon: "receipt-outline",
-    activeIcon: "receipt",
-  },
-  {
-    name: "inventory",
-    title: "Inventory",
     icon: "cube-outline",
     activeIcon: "cube",
   },
   {
+    name: "inventory",
+    title: "Inventory",
+    icon: "clipboard-text-outline",
+    activeIcon: "clipboard-text",
+  },
+  {
     name: "more",
     title: "More",
-    icon: "ellipsis-horizontal-circle-outline",
-    activeIcon: "ellipsis-horizontal-circle",
+    icon: "dots-horizontal-circle-outline",
+    activeIcon: "dots-horizontal-circle",
   },
 ];
 
@@ -66,7 +66,13 @@ export default function TabsLayout() {
             const iconName = focused
               ? (tab?.activeIcon ?? "ellipse")
               : (tab?.icon ?? "ellipse-outline");
-            return <Ionicons name={iconName} size={size} color={color} />;
+            return (
+              <MaterialCommunityIcons
+                name={iconName}
+                size={size}
+                color={color}
+              />
+            );
           },
         };
       }}>

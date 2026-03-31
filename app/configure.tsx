@@ -19,7 +19,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import api from "@/src/api/apiService";
 import { Button, Card, Input } from "@/src/components/UI";
 import { useAppStore } from "@/src/store/appStore";
-import { ApiConfig, ApiSettings } from "@/src/types";
+import { ApiSettings } from "@/src/types";
 import { C, F, R, S, W } from "@/src/utils/theme";
 
 // Read .env default
@@ -85,7 +85,6 @@ export default function ConfigureScreen() {
   const [url, setUrl] = useState(apiSettings?.baseUrl || ENV_URL || "");
   const [status, setStatus] = useState<TestStatus>("idle");
   const [message, setMessage] = useState("");
-  const [testedConfig, setTestedConfig] = useState<ApiConfig | null>(null);
 
   // Spin icon while testing
   const spinVal = new Animated.Value(0);
@@ -118,7 +117,6 @@ export default function ConfigureScreen() {
 
     setStatus("testing");
     setMessage("Connecting to server…");
-    setTestedConfig(null);
 
     // Point axios at the new URL temporarily
     await api.setBaseURL(trimmed);
@@ -139,7 +137,6 @@ export default function ConfigureScreen() {
 
       await setApiSettings(settings);
 
-      setTestedConfig(null);
       setStatus("success");
       setMessage("Connected! Server is reachable.");
       setTimeout(() => {
@@ -182,7 +179,6 @@ export default function ConfigureScreen() {
           await api.clearSavedURL();
           setUrl(ENV_URL || "");
           setStatus("idle");
-          setTestedConfig(null);
         },
       },
     ]);
@@ -246,7 +242,6 @@ export default function ConfigureScreen() {
               onChangeText={(t) => {
                 setUrl(t);
                 setStatus("idle");
-                setTestedConfig(null);
               }}
               icon="globe-outline"
               placeholder="http://192.168.1.100:8000/api/v1"

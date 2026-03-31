@@ -1,17 +1,20 @@
-// src/utils/storage.ts
-//
-// Wraps expo-secure-store for native and localStorage for web.
-// Avoids the "AsyncStorage native module is null" error that
-// happens with @react-native-async-storage in newer Expo Go builds.
-
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
+import { DraftRecord } from "../types";
 
 const IS_WEB = Platform.OS === "web";
 
-// SecureStore has a ~2 KB per-value limit.
-// For values larger than that (e.g. offline queue JSON) we chunk them.
 const CHUNK = 1800;
+export const DRAFTS_KEY = "RECEIVE_STOCK_DRAFTS";
+
+export const persistDrafts = async (newDrafts: DraftRecord[]) => {
+  try {
+    await AsyncStorage.setItem(DRAFTS_KEY, JSON.stringify(newDrafts));
+  } catch (e) {
+    console.log("Failed to save drafts", e);
+  }
+};
 
 async function setLarge(key: string, value: string): Promise<void> {
   if (value.length <= CHUNK) {

@@ -34,6 +34,7 @@ import {
   ReceivedItem,
 } from "@/src/types";
 import { generateId } from "@/src/utils/helpers";
+import { persistDrafts } from "@/src/utils/storage";
 import { C, F, R, S, W } from "@/src/utils/theme";
 
 export default function ReceiveStockScreen() {
@@ -166,13 +167,16 @@ export default function ReceiveStockScreen() {
       tradeDiscounting,
     };
     setDrafts((prev) => {
+      let updated;
       const idx = prev.findIndex((d) => d.id === draftId);
       if (idx !== -1) {
-        const u = [...prev];
-        u[idx] = draft;
-        return u;
+        updated = [...prev];
+        updated[idx] = draft;
+      } else {
+        updated = [draft, ...prev];
       }
-      return [draft, ...prev];
+      persistDrafts(updated);
+      return updated;
     });
     setActiveDraftId(draftId);
     Alert.alert("Draft Saved", `PO #${poNumber} saved locally.`);
@@ -190,7 +194,12 @@ export default function ReceiveStockScreen() {
   };
 
   const deleteDraft = (id: string) => {
-    setDrafts((prev) => prev.filter((d) => d.id !== id));
+    setDrafts((prev) => {
+      const updated = prev.filter((d) => d.id !== id);
+      persistDrafts(updated);
+      return updated;
+    });
+
     if (activeDraftId === id) setActiveDraftId(null);
   };
 
