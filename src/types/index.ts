@@ -63,7 +63,7 @@ export interface DraftRecord {
   tradeDiscounting: DropdownOption[];
   totalAmount?: number;
 }
-//end of received tabs ---------------------------------------
+//end of received tabs
 export interface Store {
   id: number;
   code: string;
@@ -76,6 +76,7 @@ export interface Supplier {
   id: number;
   code: string;
   name: string;
+  discount_percent?: number;
 }
 
 export interface Item {
@@ -154,14 +155,42 @@ export interface ApiResponse<T> {
   };
 }
 
+//withdrawal
+export interface WithdrawalItem {
+  inventory_item_id: string | number;
+  qty: number;
+  unit_price: number;
+  discount_percent: number;
+}
+
+export interface WithdrawPayload {
+  supplier_id: number;
+  reason: string;
+  withdrawn_by: string;
+  approved_by: string;
+  items: WithdrawalItem[];
+}
+
+export interface Withdrawal {
+  id?: number;
+  supplier_id: number;
+  reason: string;
+  withdrawn_by: string;
+  approved_by: string;
+  items: WithdrawalItem[];
+  created_at?: string;
+  updated_at?: string;
+}
+
 //api setting
 export interface ApiSettings {
   baseUrl: string;
   config: null;
   savedAt: string;
+  loginRequired: boolean;
 }
 
-/** Boot phases used by the root layout */
+// Boot phases used by the root layout
 export type BootPhase =
   | "checking" // querying saved URL / .env URL
   | "no_api" // no URL configured yet

@@ -1,4 +1,4 @@
-// app/(app)/(tabs)/more.tsx  — More (Settings, Offline Queue, Logout)
+// app/(app)/(tabs)/more.tsx
 
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -8,6 +8,7 @@ import {
   Alert,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TouchableOpacity,
   View,
@@ -15,18 +16,32 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import api from "@/src/api/apiService";
-import { Badge, Button, Card, SectionHeader } from "@/src/components/UI";
+import { Badge, Button, Card, Input, SectionHeader } from "@/src/components/UI";
 import { useNetwork } from "@/src/hooks/useNetwork";
 import { useOfflineSync } from "@/src/hooks/useOfflineSync";
 import { useAppStore } from "@/src/store/appStore";
-import { InventoryItem, OfflineRecord, ReceivedStock } from "@/src/types";
-import { formatDateTime, getErrorMessage } from "@/src/utils/helpers";
+import {
+  ApiSettings,
+  InventoryItem,
+  OfflineRecord,
+  ReceivedStock,
+} from "@/src/types";
+import { getErrorMessage } from "@/src/utils/helpers";
 import { C, F, R, S, W } from "@/src/utils/theme";
 
 export default function MoreScreen() {
   const router = useRouter();
-  const { user, clearAuth, offlineQueue, removeOfflineRecord, markSynced } =
-    useAppStore();
+  const [editingApi, setEditingApi] = useState(false);
+  const {
+    user,
+    clearAuth,
+    offlineQueue,
+    removeOfflineRecord,
+    markSynced,
+    apiSettings,
+    setApiSettings,
+  } = useAppStore();
+
   const { isOnline } = useNetwork();
   const { syncAll } = useOfflineSync();
 
@@ -34,9 +49,24 @@ export default function MoreScreen() {
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [showQueue, setShowQueue] = useState(false);
 
+  const loginRequired = apiSettings?.loginRequired ?? true;
+
   const pending = offlineQueue.filter((r) => !r.synced);
   const done = offlineQueue.filter((r) => r.synced);
 
+  // ── Toggle Login Required ─────────────────────────────
+  const handleToggleLoginRequired = async (value: boolean) => {
+    const updated: ApiSettings = {
+      baseUrl: apiSettings?.baseUrl ?? "",
+      config: apiSettings?.config ?? null,
+      savedAt: apiSettings?.savedAt ?? new Date().toISOString(),
+      loginRequired: value,
+    };
+
+    await setApiSettings(updated);
+  };
+
+  // ── Logout ─────────────────────────────────────────────
   const handleLogout = () => {
     Alert.alert("Sign Out", "Sign out of StockFlow?", [
       { text: "Cancel", style: "cancel" },
@@ -51,6 +81,7 @@ export default function MoreScreen() {
     ]);
   };
 
+  // ── Sync All ───────────────────────────────────────────
   const handleSyncAll = async () => {
     if (!isOnline) {
       Alert.alert("Offline", "Connect to internet first.");
@@ -59,12 +90,15 @@ export default function MoreScreen() {
     setSyncing(true);
     await syncAll();
     setSyncing(false);
-    Alert.alert("Done", `Sync complete.`);
+    Alert.alert("Done", "Sync complete.");
   };
 
+  // ── Sync One ───────────────────────────────────────────
   const handleSyncOne = async (rec: OfflineRecord) => {
     if (!isOnline) return;
+
     setSyncingId(rec.id);
+
     try {
       if (rec.type === "receive_stock") {
         await api.createReceivedStock(rec.data as ReceivedStock);
@@ -79,8 +113,7 @@ export default function MoreScreen() {
     }
   };
 
-  const { apiSettings } = useAppStore();
-
+  //Settings Menu
   const menuItems = [
     {
       icon: "server-outline" as const,
@@ -110,204 +143,198 @@ export default function MoreScreen() {
         />
       </View>
 
-      <ScrollView
-        contentContainerStyle={s.content}
-        showsVerticalScrollIndicator={false}>
-        {/* ── Offline Queue card ──────────────────────────── */}
-        <Card>
-          <TouchableOpacity
-            style={s.queueHeader}
-            onPress={() => setShowQueue((v) => !v)}
-            activeOpacity={0.75}>
-            <View
-              style={[
-                s.queueIcon,
-                {
-                  backgroundColor:
-                    pending.length > 0 ? C.accentOrange + "20" : C.bgElevated,
-                },
-              ]}>
-              <Ionicons
-                name="cloud-upload-outline"
-                size={22}
-                color={pending.length > 0 ? C.accentOrange : C.textTertiary}
-              />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={s.queueTitle}>Offline Queue</Text>
-              <Text style={s.queueSub}>
-                {pending.length} pending · {done.length} synced
-              </Text>
-            </View>
-            {pending.length > 0 && (
-              <View style={s.pendingBadge}>
-                <Text style={s.pendingBadgeTxt}>{pending.length}</Text>
-              </View>
-            )}
-            <Ionicons
-              name={showQueue ? "chevron-up" : "chevron-down"}
-              size={18}
-              color={C.textTertiary}
-            />
-          </TouchableOpacity>
-
-          {showQueue && (
-            <View style={{ marginTop: S.md }}>
-              {pending.length > 0 && (
-                <Button
-                  title={syncing ? "Syncing…" : `Sync All (${pending.length})`}
-                  onPress={handleSyncAll}
-                  loading={syncing}
-                  disabled={!isOnline}
-                  icon="cloud-upload-outline"
-                  variant={isOnline ? "primary" : "secondary"}
-                  style={{ marginBottom: S.md }}
-                />
-              )}
-
-              {offlineQueue.length === 0 ? (
-                <View style={s.emptyQ}>
-                  <Ionicons
-                    name="cloud-done-outline"
-                    size={32}
-                    color={C.textTertiary}
-                  />
-                  <Text style={s.emptyQTxt}>Queue is empty</Text>
-                </View>
-              ) : (
-                offlineQueue.map((rec) => (
-                  <View key={rec.id} style={s.qRec}>
-                    <View
-                      style={[
-                        s.qRecIcon,
-                        {
-                          backgroundColor:
-                            rec.type === "receive_stock"
-                              ? C.accent + "20"
-                              : C.primary + "20",
-                        },
-                      ]}>
-                      <Ionicons
-                        name={
-                          rec.type === "receive_stock"
-                            ? "download-outline"
-                            : "cube-outline"
-                        }
-                        size={15}
-                        color={
-                          rec.type === "receive_stock" ? C.accent : C.primary
-                        }
-                      />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={s.qRecType}>
-                        {rec.type === "receive_stock"
-                          ? "Received Stock"
-                          : "Inventory Item"}
-                      </Text>
-                      <Text style={s.qRecTime}>
-                        {formatDateTime(rec.timestamp)}
-                      </Text>
-                    </View>
-                    <Badge
-                      label={rec.synced ? "Synced" : "Pending"}
-                      color={rec.synced ? C.accent : C.accentOrange}
-                      bg={(rec.synced ? C.accent : C.accentOrange) + "20"}
-                    />
-                    {!rec.synced && (
-                      <TouchableOpacity
-                        style={s.qSyncBtn}
-                        onPress={() => handleSyncOne(rec)}
-                        disabled={!isOnline || syncingId === rec.id}>
-                        {syncingId === rec.id ? (
-                          <ActivityIndicator size="small" color={C.primary} />
-                        ) : (
-                          <Ionicons
-                            name="cloud-upload-outline"
-                            size={18}
-                            color={isOnline ? C.primary : C.textDisabled}
-                          />
-                        )}
-                      </TouchableOpacity>
-                    )}
-                    <TouchableOpacity
-                      style={s.qDelBtn}
-                      onPress={() => {
-                        Alert.alert("Remove", "Remove from queue?", [
-                          { text: "Cancel", style: "cancel" },
-                          {
-                            text: "Remove",
-                            style: "destructive",
-                            onPress: () => removeOfflineRecord(rec.id),
-                          },
-                        ]);
-                      }}>
-                      <Ionicons
-                        name="trash-outline"
-                        size={16}
-                        color={C.error}
-                      />
-                    </TouchableOpacity>
-                  </View>
-                ))
-              )}
-            </View>
-          )}
-        </Card>
-
-        {/* ── Menu items ──────────────────────────────────── */}
-        <Card style={{ marginTop: S.md }}>
-          <SectionHeader title="Settings" />
-          {menuItems.map((item, i) => (
-            <View key={item.label}>
+      <ScrollView contentContainerStyle={s.content}>
+        {/* ─────────────────────────────────────────────── */}
+        {/* LOGIN REQUIRED = TRUE (APP MODE) */}
+        {/* ─────────────────────────────────────────────── */}
+        {loginRequired ? (
+          <>
+            {/* Offline Queue */}
+            <Card>
               <TouchableOpacity
-                style={s.menuRow}
-                onPress={item.onPress}
-                activeOpacity={0.7}>
-                <View
-                  style={[s.menuIcon, { backgroundColor: item.color + "18" }]}>
-                  <Ionicons name={item.icon} size={20} color={item.color} />
-                </View>
+                style={s.queueHeader}
+                onPress={() => setShowQueue((v) => !v)}>
+                <Ionicons
+                  name="cloud-upload-outline"
+                  size={22}
+                  color={C.primary}
+                />
                 <View style={{ flex: 1 }}>
-                  <Text style={s.menuLabel}>{item.label}</Text>
-                  <Text style={s.menuSub} numberOfLines={1}>
-                    {item.sub}
+                  <Text style={s.queueTitle}>Offline Queue</Text>
+                  <Text style={s.queueSub}>
+                    {pending.length} pending · {done.length} synced
                   </Text>
                 </View>
-                <Ionicons
-                  name="chevron-forward"
-                  size={16}
-                  color={C.textTertiary}
-                />
               </TouchableOpacity>
-              {i < menuItems.length - 1 && (
-                <View
-                  style={{
-                    height: 1,
-                    backgroundColor: C.border,
-                    marginLeft: 52,
-                  }}
-                />
+
+              {showQueue && (
+                <View style={{ marginTop: S.md }}>
+                  {offlineQueue.length === 0 ? (
+                    <Text style={s.emptyQTxt}>Queue is empty</Text>
+                  ) : (
+                    offlineQueue.map((rec) => (
+                      <View key={rec.id} style={s.qRec}>
+                        <Text style={s.qRecType}>
+                          {rec.type === "receive_stock"
+                            ? "Received Stock"
+                            : "Inventory Item"}
+                        </Text>
+
+                        <Badge
+                          label={rec.synced ? "Synced" : "Pending"}
+                          color={rec.synced ? C.accent : C.accentOrange}
+                          bg={(rec.synced ? C.accent : C.accentOrange) + "20"}
+                        />
+
+                        {!rec.synced && (
+                          <TouchableOpacity
+                            onPress={() => handleSyncOne(rec)}
+                            disabled={!isOnline || syncingId === rec.id}>
+                            {syncingId === rec.id ? (
+                              <ActivityIndicator />
+                            ) : (
+                              <Ionicons
+                                name="cloud-upload-outline"
+                                size={18}
+                                color={C.primary}
+                              />
+                            )}
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    ))
+                  )}
+                </View>
               )}
-            </View>
-          ))}
-        </Card>
+            </Card>
 
-        {/* ── Logout ──────────────────────────────────────── */}
-        <Button
-          title="Sign Out"
-          onPress={handleLogout}
-          variant="danger"
-          icon="log-out-outline"
-          style={{ marginTop: S.md }}
-        />
+            {/* Settings */}
+            <Card style={{ marginTop: S.md }}>
+              <SectionHeader title="Settings" />
 
-        <Text style={s.version}>StockFlow v1.0 · Expo SDK 52</Text>
+              {menuItems.map((item) => (
+                <TouchableOpacity
+                  key={item.label}
+                  style={s.menuRow}
+                  onPress={item.onPress}>
+                  <Ionicons name={item.icon} size={20} color={item.color} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.menuLabel}>{item.label}</Text>
+                    <Text style={s.menuSub}>{item.sub}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </Card>
+
+            <Button
+              title="Sign Out"
+              onPress={handleLogout}
+              variant="danger"
+              icon="log-out-outline"
+              style={{ marginTop: S.md }}
+            />
+          </>
+        ) : (
+          /* LOGIN REQUIRED = FALSE (CONFIG MODE) */
+          <>
+            <Card>
+              <View style={s.toggleRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.toggleLabel}>Login Required</Text>
+                  <Text style={s.toggleSub}>
+                    Require login before accessing app
+                  </Text>
+                </View>
+
+                <Switch
+                  value={loginRequired}
+                  onValueChange={handleToggleLoginRequired}
+                  trackColor={{ false: "#ccc", true: C.primary }}
+                  thumbColor={loginRequired ? C.primary : "#f4f3f4"}
+                />
+              </View>
+            </Card>
+
+            {/* API CONFIG */}
+            <Card>
+              <Text style={s.cardTitle}>API Server</Text>
+
+              {!editingApi ? (
+                <>
+                  {/* READ-ONLY BASE64 DISPLAY */}
+                  <View style={s.readOnlyBox}>
+                    <Text style={s.base64Value} numberOfLines={2}>
+                      {btoa(apiSettings?.baseUrl ?? "")}
+                    </Text>
+                  </View>
+
+                  <Button
+                    title="Change API"
+                    onPress={() => setEditingApi(true)}
+                    icon="create-outline"
+                    variant="secondary"
+                  />
+                </>
+              ) : (
+                <>
+                  <Input
+                    value={apiSettings?.baseUrl ?? ""}
+                    onChangeText={(t) =>
+                      setApiSettings({
+                        baseUrl: t,
+                        config: null,
+                        savedAt: new Date().toISOString(),
+                        loginRequired,
+                      })
+                    }
+                    placeholder="http://192.168.1.100:8000/api/v1"
+                    icon="globe-outline"
+                  />
+
+                  <View style={{ flexDirection: "column", gap: S.sm }}>
+                    <Button
+                      title="Test & Save"
+                      onPress={async () => {
+                        const url = apiSettings?.baseUrl ?? "";
+                        await api.setBaseURL(url);
+                        const ok = await api.ping();
+
+                        if (!ok) {
+                          Alert.alert("Error", "Server not reachable");
+                          return;
+                        }
+
+                        await setApiSettings({
+                          baseUrl: url,
+                          config: null,
+                          savedAt: new Date().toISOString(),
+                          loginRequired,
+                        });
+
+                        setEditingApi(false);
+                        Alert.alert("Success", "Connected!");
+                      }}
+                      icon="wifi-outline"
+                      variant="primary"
+                    />
+
+                    <Button
+                      title="Cancel"
+                      variant="ghost"
+                      onPress={() => setEditingApi(false)}
+                    />
+                  </View>
+                </>
+              )}
+            </Card>
+          </>
+        )}
+
+        <Text style={s.version}>StockFlow v1.0</Text>
       </ScrollView>
     </SafeAreaView>
   );
 }
-
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
   header: {
@@ -322,8 +349,6 @@ const s = StyleSheet.create({
   title: { fontSize: F.xl, fontWeight: W.bold, color: C.textPrimary },
   onlineDot: { width: 10, height: 10, borderRadius: 5 },
   content: { padding: S.lg, paddingBottom: 80, gap: S.sm },
-
-  // Queue
   queueHeader: { flexDirection: "row", alignItems: "center", gap: S.md },
   queueIcon: {
     width: 44,
@@ -346,7 +371,6 @@ const s = StyleSheet.create({
   pendingBadgeTxt: { fontSize: 11, fontWeight: W.bold, color: C.white },
   emptyQ: { alignItems: "center", paddingVertical: S.xl, gap: S.sm },
   emptyQTxt: { fontSize: F.md, color: C.textTertiary },
-
   qRec: {
     flexDirection: "row",
     alignItems: "center",
@@ -380,7 +404,6 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-
   // Menu
   menuRow: {
     flexDirection: "row",
@@ -397,11 +420,48 @@ const s = StyleSheet.create({
   },
   menuLabel: { fontSize: F.md, color: C.textPrimary, fontWeight: W.medium },
   menuSub: { fontSize: F.xs, color: C.textTertiary, marginTop: 2 },
-
   version: {
     textAlign: "center",
     fontSize: F.xs,
     color: C.textTertiary,
     marginTop: S.lg,
+  },
+  // ── Toggle ─────────────────────────────
+  toggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: S.md,
+    marginTop: S.sm,
+  },
+
+  toggleLabel: {
+    fontSize: F.sm,
+    fontWeight: W.semibold,
+    color: C.textPrimary,
+  },
+
+  toggleSub: {
+    fontSize: F.xs,
+    color: C.textTertiary,
+    marginTop: 2,
+  },
+
+  cardTitle: {
+    fontSize: F.lg,
+    fontWeight: W.bold,
+    color: C.textPrimary,
+    marginBottom: S.xs,
+  },
+  readOnlyBox: {
+    padding: S.md,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: R.md,
+    marginBottom: S.md,
+  },
+  base64Value: {
+    fontSize: F.xs,
+    color: C.textPrimary,
+    fontFamily: "monospace",
   },
 });

@@ -1,5 +1,3 @@
-// app/(app)/(tabs)/inventory.tsx  — Inventory List + Encoding
-
 import { Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system";
@@ -74,7 +72,6 @@ interface EncodeModalProps {
   onClose: () => void;
   onSaved: (item: InventoryItem) => void;
   existing?: InventoryItem | null;
-  storeId?: number;
 }
 
 function EncodeModal({
@@ -82,7 +79,6 @@ function EncodeModal({
   onClose,
   onSaved,
   existing,
-  storeId,
 }: EncodeModalProps) {
   const { isOnline } = useNetwork();
   const { addOfflineRecord } = useAppStore();
@@ -130,7 +126,7 @@ function EncodeModal({
 
   const handleSave = async () => {
     if (!validate()) return;
-    const payload: InventoryItem = { ...form, store_id: storeId };
+    const payload: InventoryItem = form;
 
     if (!isOnline) {
       await addOfflineRecord({
@@ -415,8 +411,6 @@ const em = StyleSheet.create({
 // InventoryScreen
 // ─────────────────────────────────────────────────────────────
 export default function InventoryScreen() {
-  const { selectedStore } = useAppStore();
-
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -432,7 +426,7 @@ export default function InventoryScreen() {
 
   useEffect(() => {
     load(true);
-  }, [search, category, selectedStore]);
+  }, [search, category]);
 
   const load = async (reset = false) => {
     const pg = reset ? 1 : page;
@@ -444,7 +438,6 @@ export default function InventoryScreen() {
       const res = await api.getInventory({
         search: search || undefined,
         category: category || undefined,
-        store_id: selectedStore?.id,
         page: pg,
       });
       setItems((prev) => (reset ? res.data : [...prev, ...res.data]));
@@ -461,7 +454,7 @@ export default function InventoryScreen() {
     setRefreshing(true);
     await load(true);
     setRefreshing(false);
-  }, [search, category, selectedStore]);
+  }, [search, category]);
 
   const handleDelete = (item: InventoryItem) => {
     Alert.alert("Delete Item", `Delete "${item.description}"?`, [
@@ -487,7 +480,7 @@ export default function InventoryScreen() {
     try {
       let csv: string;
       try {
-        csv = await api.exportInventoryCSV(selectedStore?.id);
+        csv = await api.exportInventoryCSV();
       } catch {
         csv = rowsToCSV(
           items.map((i) => ({
@@ -541,7 +534,7 @@ export default function InventoryScreen() {
         return;
       }
       try {
-        const res = await api.importInventoryCSV(csv, selectedStore?.id ?? 0);
+        const res = await api.importInventoryCSV(csv);
         Alert.alert("Import Complete", `${res.imported} items imported.`);
         load(true);
       } catch {
@@ -743,7 +736,6 @@ export default function InventoryScreen() {
           }
         }}
         existing={editingItem}
-        storeId={selectedStore?.id}
       />
     </SafeAreaView>
   );

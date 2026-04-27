@@ -1,9 +1,3 @@
-// app/(auth)/settings.tsx
-//
-// Pre-login settings screen:
-//   • Configure the API base URL
-//   • Preview + select a store (saved locally for later use after login)
-
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
@@ -26,21 +20,14 @@ const IS_TABLET = width >= 768;
 
 export default function SettingsScreen() {
   const router = useRouter();
-  //const { selectedStore, setSelectedStore } = useAppStore();
-
   const [baseURL, setBaseURL] = useState("");
-  //const [stores, setStores] = useState<Store[]>([]);
-  const [loadingURL, setLoadingURL] = useState(false);
-  //const [loadingList, setLoadingList] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [urlError, setUrlError] = useState("");
 
-  // ── Init ───────────────────────────────────────────────────
+  //  Init
   useEffect(() => {
     setBaseURL(btoa(api.getBaseURL()));
   }, []);
 
-  // ── UI ─────────────────────────────────────────────────────
+  // UI
   return (
     <SafeAreaView style={s.safe}>
       {/* ── Header ─────────────────────────────────────────── */}

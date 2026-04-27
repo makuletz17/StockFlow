@@ -23,16 +23,16 @@ const TABS: TabConfig[] = [
     activeIcon: "view-dashboard",
   },
   {
-    name: "received",
+    name: "receive",
     title: "Receive",
     icon: "package-variant-closed", // solid package
     activeIcon: "package-variant",
   },
   {
-    name: "received-list",
-    title: "Received",
-    icon: "cube-outline",
-    activeIcon: "cube",
+    name: "withdraw",
+    title: "Withdraw Stocks",
+    icon: "package-variant-minus",
+    activeIcon: "package-variant",
   },
   {
     name: "inventory",
@@ -52,44 +52,53 @@ export default function TabsLayout() {
   const offlineQueue = useAppStore((s) => s.offlineQueue ?? []);
   const pendingCount = offlineQueue.filter((r) => !r.synced).length;
 
+  const loginRequired = useAppStore(
+    (s) => s.apiSettings?.loginRequired ?? true,
+  );
+
   return (
     <Tabs
-      screenOptions={({ route }) => {
-        const tab = TABS.find((t) => t.name === route.name);
-        return {
-          headerShown: false,
-          tabBarStyle: styles.bar,
-          tabBarActiveTintColor: C.primary,
-          tabBarInactiveTintColor: C.textTertiary,
-          tabBarLabelStyle: styles.label,
-          tabBarIcon: ({ focused, color, size }) => {
-            const iconName = focused
-              ? (tab?.activeIcon ?? "ellipse")
-              : (tab?.icon ?? "ellipse-outline");
-            return (
-              <MaterialCommunityIcons
-                name={iconName}
-                size={size}
-                color={color}
-              />
-            );
-          },
-        };
+      screenOptions={{
+        headerShown: false,
+        tabBarStyle: styles.bar,
+        tabBarActiveTintColor: C.primary,
+        tabBarInactiveTintColor: C.textTertiary,
+        tabBarLabelStyle: styles.label,
       }}>
-      {TABS.map((tab) => (
-        <Tabs.Screen
-          key={tab.name}
-          name={tab.name}
-          options={{
-            title: tab.title,
-            tabBarBadge:
-              tab.name === "more" && pendingCount > 0
-                ? pendingCount
-                : undefined,
-            tabBarBadgeStyle: styles.badge,
-          }}
-        />
-      ))}
+      {TABS.map((tab) => {
+        // 🔥 Hide these when login is NOT required
+        const hidden =
+          !loginRequired &&
+          (tab.name === "index" ||
+            tab.name === "receive" ||
+            tab.name === "inventory");
+
+        return (
+          <Tabs.Screen
+            key={tab.name}
+            name={tab.name}
+            options={{
+              title: tab.title,
+              href: hidden ? null : undefined,
+              tabBarIcon: ({ focused, color, size }) => {
+                const iconName = focused ? tab.activeIcon : tab.icon;
+                return (
+                  <MaterialCommunityIcons
+                    name={iconName}
+                    size={size}
+                    color={color}
+                  />
+                );
+              },
+              tabBarBadge:
+                tab.name === "more" && pendingCount > 0
+                  ? pendingCount
+                  : undefined,
+              tabBarBadgeStyle: styles.badge,
+            }}
+          />
+        );
+      })}
     </Tabs>
   );
 }

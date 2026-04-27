@@ -270,7 +270,7 @@ const badge = StyleSheet.create({
 export const SectionHeader: React.FC<{
   title: string;
   subtitle?: string;
-  action?: { label: string; onPress: () => void };
+  action?: React.ReactNode;
   style?: StyleProp<ViewStyle>;
 }> = ({ title, subtitle, action, style }) => (
   <View style={[sh.row, style]}>
@@ -278,11 +278,8 @@ export const SectionHeader: React.FC<{
       <Text style={sh.title}>{title}</Text>
       {subtitle ? <Text style={sh.sub}>{subtitle}</Text> : null}
     </View>
-    {action ? (
-      <TouchableOpacity onPress={action.onPress}>
-        <Text style={sh.action}>{action.label}</Text>
-      </TouchableOpacity>
-    ) : null}
+
+    {action ? <View>{action}</View> : null}
   </View>
 );
 

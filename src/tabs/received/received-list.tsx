@@ -1,5 +1,3 @@
-// app/(app)/(tabs)/received-list.tsx  — Received Stocks List
-
 import { Ionicons } from "@expo/vector-icons";
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -16,7 +14,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import api from "@/src/api/apiService";
 import { Badge, Card, EmptyState } from "@/src/components/UI";
-import { useAppStore } from "@/src/store/appStore";
 import { ReceivedStock } from "@/src/types";
 import { formatDate } from "@/src/utils/helpers";
 import { C, F, R, S, W } from "@/src/utils/theme";
@@ -28,8 +25,6 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 export default function ReceivedListScreen() {
-  const { selectedStore } = useAppStore();
-
   const [items, setItems] = useState<ReceivedStock[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -42,7 +37,7 @@ export default function ReceivedListScreen() {
 
   useEffect(() => {
     load(true);
-  }, [search, dateFrom, dateTo, selectedStore]);
+  }, [search, dateFrom, dateTo]);
 
   const load = async (reset = false) => {
     const pg = reset ? 1 : page;
@@ -55,7 +50,6 @@ export default function ReceivedListScreen() {
         search: search || undefined,
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
-        store_id: selectedStore?.id,
         page: pg,
       });
       const data = res.data;
@@ -73,7 +67,7 @@ export default function ReceivedListScreen() {
     setRefreshing(true);
     await load(true);
     setRefreshing(false);
-  }, [search, dateFrom, dateTo, selectedStore]);
+  }, [search, dateFrom, dateTo]);
 
   const clearFilters = () => {
     setSearch("");

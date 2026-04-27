@@ -10,6 +10,7 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TouchableOpacity,
   View,
@@ -28,7 +29,7 @@ const ENV_URL: string =
   process.env["EXPO_PUBLIC_API_URL"] ??
   "";
 
-// ── Status badge ─────────────────────────────────────────────
+// ── Status badge
 type TestStatus = "idle" | "testing" | "success" | "error";
 
 function StatusBadge({
@@ -79,12 +80,16 @@ const badge = StyleSheet.create({
 // ── Main screen ───────────────────────────────────────────────
 export default function ConfigureScreen() {
   const router = useRouter();
-  const { apiSettings, setApiSettings, clearApiSettings } = useAppStore();
+  const { apiSettings, isAuthenticated, setApiSettings, clearApiSettings } =
+    useAppStore();
 
   // Pre-fill with saved URL, or .env default
   const [url, setUrl] = useState(apiSettings?.baseUrl || ENV_URL || "");
   const [status, setStatus] = useState<TestStatus>("idle");
   const [message, setMessage] = useState("");
+  const [loginRequired, setLoginRequired] = useState(
+    apiSettings?.loginRequired ?? true, // default true
+  );
 
   // Spin icon while testing
   const spinVal = new Animated.Value(0);
@@ -131,8 +136,9 @@ export default function ConfigureScreen() {
       }
       const settings: ApiSettings = {
         baseUrl: trimmed,
-        config: null, // no config anymore
+        config: null,
         savedAt: new Date().toISOString(),
+        loginRequired,
       };
 
       await setApiSettings(settings);
@@ -164,7 +170,15 @@ export default function ConfigureScreen() {
 
   // ── Proceed to login ──────────────────────────────────────
   const handleProceed = () => {
-    router.replace("/(auth)/login");
+    if (!loginRequired) {
+      router.replace("/(app)/(tabs)/withdraw");
+      return;
+    }
+    if (isAuthenticated) {
+      router.back();
+    } else {
+      router.replace("/(auth)/login");
+    }
   };
 
   // ── Reset saved config ────────────────────────────────────
@@ -179,6 +193,7 @@ export default function ConfigureScreen() {
           await api.clearSavedURL();
           setUrl(ENV_URL || "");
           setStatus("idle");
+          setLoginRequired(true);
         },
       },
     ]);
@@ -289,6 +304,22 @@ export default function ConfigureScreen() {
             ))}
           </Card>
 
+          <View style={s.toggleRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={s.toggleLabel}>Login Required</Text>
+              <Text style={s.toggleSub}>
+                Require users to log in before accessing the app
+              </Text>
+            </View>
+
+            <Switch
+              value={loginRequired}
+              onValueChange={setLoginRequired}
+              trackColor={{ false: "#ccc", true: C.primary }}
+              thumbColor={loginRequired ? C.primary : "#f4f3f4"}
+            />
+          </View>
+
           {/* ── Actions ──────────────────────────────────── */}
           <View style={s.actions}>
             <Button
@@ -301,9 +332,13 @@ export default function ConfigureScreen() {
 
             {canProceed && (
               <Button
-                title="Continue to Login →"
+                title={isAuthenticated ? "Back to App" : "Continue to Login →"}
                 onPress={handleProceed}
-                icon="arrow-forward-outline"
+                icon={
+                  isAuthenticated
+                    ? "arrow-back-outline"
+                    : "arrow-forward-outline"
+                }
                 variant="primary"
                 style={{ marginTop: S.sm }}
               />
@@ -410,4 +445,20 @@ const s = StyleSheet.create({
   tipTxt: { flex: 1, fontSize: F.sm, color: C.textSecondary, lineHeight: 20 },
 
   actions: { gap: S.sm },
+  toggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: S.md,
+    gap: S.md,
+  },
+  toggleLabel: {
+    fontSize: F.sm,
+    fontWeight: W.semibold,
+    color: C.textPrimary,
+  },
+  toggleSub: {
+    fontSize: F.xs,
+    color: C.textTertiary,
+    marginTop: 2,
+  },
 });

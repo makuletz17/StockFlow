@@ -10,6 +10,8 @@ import {
   Store,
   Supplier,
   User,
+  Withdrawal,
+  WithdrawPayload,
 } from "../types";
 import { storage } from "../utils/storage";
 
@@ -142,6 +144,7 @@ class ApiService {
     });
 
     const responseData = res.data;
+    console.log(responseData);
 
     const token = responseData?.token || responseData?.data?.token;
     const status = responseData?.status || (token ? "success" : null);
@@ -263,20 +266,49 @@ class ApiService {
     await this.http.delete(`/inventory/${id}`);
   }
 
-  async exportInventoryCSV(store_id?: number): Promise<string> {
+  async exportInventoryCSV(): Promise<string> {
     const res = await this.http.get("/inventory/export", {
-      params: { store_id },
       responseType: "text",
     });
     return res.data as string;
   }
 
-  async importInventoryCSV(csvData: string, store_id: number) {
+  async importInventoryCSV(csvData: string) {
     const res = await this.http.post("/inventory/import", {
       csv_data: csvData,
-      store_id,
     });
     return res.data.data as { imported: number; errors: string[] };
+  }
+
+  //Withdrawals
+  async getWithdrawals(params?: {
+    search?: string;
+    supplier_id?: string;
+    date_from?: string;
+    date_to?: string;
+    store_id?: number;
+    page?: number;
+  }): Promise<ApiResponse<Withdrawal[]>> {
+    const res: AxiosResponse<ApiResponse<Withdrawal[]>> = await this.http.get(
+      "/withdrawals",
+      { params },
+    );
+    return res.data;
+  }
+
+  async createWithdrawal(data: WithdrawPayload): Promise<Withdrawal> {
+    const res: AxiosResponse<ApiResponse<Withdrawal>> = await this.http.post(
+      "/withdrawals",
+      data,
+    );
+    return res.data.data;
+  }
+
+  async getWithdrawalById(id: number): Promise<Withdrawal> {
+    const res: AxiosResponse<ApiResponse<Withdrawal>> = await this.http.get(
+      `/withdrawals/${id}`,
+    );
+    return res.data.data;
   }
 }
 

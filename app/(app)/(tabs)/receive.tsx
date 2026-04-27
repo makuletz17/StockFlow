@@ -316,7 +316,6 @@ export default function ReceiveStockScreen() {
   };
 
   // ─────────────────────────────────────────────────────────────────────────
-
   return (
     <SafeAreaView style={s.safe}>
       {/* Header */}

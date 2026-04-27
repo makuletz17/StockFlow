@@ -81,16 +81,16 @@ export default function DashboardScreen() {
       route: "/(app)/(tabs)/receive",
     },
     {
+      label: "Withdraw\nStock",
+      icon: "package-variant-minus",
+      color: C.error,
+      route: "/(app)/withdraw",
+    },
+    {
       label: "Inventory\nList",
       icon: "clipboard-text",
       color: C.primary,
       route: "/(app)/(tabs)/inventory",
-    },
-    {
-      label: "Received\nList",
-      icon: "package-variant-closed",
-      color: C.accentPurple,
-      route: "/(app)/(tabs)/received-list",
     },
     {
       label: "More\nOptions",

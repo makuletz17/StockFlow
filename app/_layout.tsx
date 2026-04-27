@@ -1,27 +1,3 @@
-// app/_layout.tsx
-//
-// ─── Boot state machine ────────────────────────────────────────────────────
-//
-//  App opens
-//     │
-//     ▼
-//  [checking]
-//     │
-//     ├─ no URL saved anywhere ──────────► [no_api]   → /configure
-//     │
-//     ├─ URL found + apiSettings cached ─► [ready]    (skip ping on reload)
-//     │       │
-//     │       ├─ isAuthenticated → /(app)/(tabs)
-//     │       └─ not logged in   → /(auth)/login
-//     │
-//     └─ URL found but no cached settings → ping()
-//             │
-//             ├─ true  → save settings → [ready]
-//             └─ false → [api_error]   → /configure
-//
-// Key: if apiSettings already exist in storage we TRUST them and skip
-// the ping. The user can force a re-test from the configure screen.
-
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -41,7 +17,7 @@ import { useAppStore } from "@/src/store/appStore";
 import { ApiSettings, BootPhase } from "@/src/types";
 import { C, F, S, W } from "@/src/utils/theme";
 
-// ── Animated logo ────────────────────────────────────────────
+//Animated logo
 function Logo() {
   const spin = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(0.7)).current;
@@ -90,7 +66,7 @@ const logo = StyleSheet.create({
   },
 });
 
-// ── Splash / checking screen ─────────────────────────────────
+// Splash / checking screen
 function SplashScreen({
   phase,
   savedName,
@@ -187,6 +163,7 @@ export default function RootLayout() {
 
   const { loadState, isAuthenticated, apiSettings, setApiSettings } =
     useAppStore();
+  const loginRequired = apiSettings?.loginRequired ?? true;
 
   const [phase, setPhase] = useState<BootPhase>("checking");
   const [bootDone, setBootDone] = useState(false);
@@ -221,6 +198,18 @@ export default function RootLayout() {
 
     if (stored) {
       // Already verified before — go straight to auth check
+      const normalized: ApiSettings = {
+        baseUrl: stored.baseUrl,
+        config: stored.config ?? null,
+        savedAt: stored.savedAt,
+        loginRequired:
+          typeof stored.loginRequired === "boolean"
+            ? stored.loginRequired
+            : true,
+      };
+
+      await setApiSettings(normalized);
+
       setPhase("ready");
       setBootDone(true);
       return;
@@ -234,6 +223,7 @@ export default function RootLayout() {
         baseUrl: api.getBaseURL(),
         config: null,
         savedAt: new Date().toISOString(),
+        loginRequired: true,
       };
       await setApiSettings(settings);
       setPhase("ready");
@@ -261,15 +251,23 @@ export default function RootLayout() {
     }
 
     if (phase === "ready") {
+      if (!loginRequired) {
+        if (!onApp) {
+          router.replace("/(app)/(tabs)/withdraw");
+        }
+        return;
+      }
       if (isAuthenticated) {
-        // Logged in — go to dashboard unless already in app
-        if (!onApp) router.replace("/(app)/(tabs)");
+        if (!onApp && !onConfigure) {
+          router.replace("/(app)/(tabs)");
+        }
       } else {
-        // Not logged in — go to login unless already there or on configure
-        if (!onAuth && !onConfigure) router.replace("/(auth)/login");
+        if (!onAuth && !onConfigure) {
+          router.replace("/(auth)/login");
+        }
       }
     }
-  }, [bootDone, phase, isAuthenticated, segments]);
+  }, [bootDone, phase, isAuthenticated, loginRequired, segments]);
 
   // ── Show splash while booting ──────────────────────────────
   if (!bootDone || phase === "checking") {
